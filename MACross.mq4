@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACross"
-#property version     "1.08"
+#property version     "1.09"
 #property strict
 #property indicator_chart_window
 
@@ -251,8 +251,6 @@ void SetProfitText(int idx, datetime t, double refPrice, double profit, int trad
     if(ObjectFind(name) == -1)
     {
         ObjectCreate(name, OBJ_TEXT, 0, t, price);
-        ObjectSet(name, OBJPROP_FONT, "Arial");
-        ObjectSet(name, OBJPROP_FONTSIZE, 8);
     }
 
     ObjectSetText(name, text, 8, "Arial", textColor);

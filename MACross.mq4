@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MarketRange-ADR"
-#property version     "1.02"
+#property version     "1.03"
 #property strict
 #property indicator_chart_window
 
@@ -191,7 +191,7 @@ void SetArrow(string type, int idx, datetime t, double lowVal, double highVal, c
     {
         ObjectCreate(name, OBJ_ARROW, 0, t, price);
         ObjectSet(name, OBJPROP_ARROWCODE, code);
-        ObjectSet(name, OBJPROP_ANCHOR, isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM);
+        ObjectSet(name, OBJPROP_ANCHOR, isBuy ? 3 : 5); // 3 = ANCHOR_TOP, 5 = ANCHOR_BOTTOM
     }
 
     ObjectSet(name, OBJPROP_COLOR, col);
@@ -208,8 +208,8 @@ void SetLabel(string text, string val, color col, int size, int x, int y)
     if(ObjectFind(name) == - 1)
     {
         ObjectCreate(name, OBJ_LABEL, 0, 0, 0);
-        ObjectSet(name, OBJPROP_CORNER, CORNER_TOP_RIGHT);
-        ObjectSet(name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UP);
+        ObjectSet(name, OBJPROP_CORNER, 1); // 1 = CORNER_RIGHT_UPPER
+        ObjectSet(name, OBJPROP_ANCHOR, 6); // 6 = ANCHOR_RIGHT_UPPER
     }
    
     ObjectSetText(name, val, size, "Arial Bold", col);

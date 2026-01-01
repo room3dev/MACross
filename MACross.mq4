@@ -99,12 +99,13 @@ const int &spread[])
     ArraySetAsSeries(low, true);
     ArraySetAsSeries(close, true);
 
-    // Limit calculation to new bars or initial run
-    int limit = rates_total - prev_calculated;
-    if(limit > 1) limit = rates_total - SlowPeriod - 1;
-    if(limit < 0) limit = 0;
-
-    for(int i = limit; i >= 0; i--)
+    // Reset indicator variables for full re-calculation
+    double closed_profit_pips = 0;
+    int current_trade_type = 0; // 0 = None, 1 = Buy, 2 = Sell
+    double entry_price = 0;
+    
+    // We calculate from oldest to newest to track "trades"
+    for(int i = rates_total - SlowPeriod - 2; i >= 0; i--)
     {
         // 1. Calculate MA Values
         double fast0 = iMA(NULL, 0, FastPeriod, 0, FastMethod, FastPrice, i);
@@ -116,24 +117,46 @@ const int &spread[])
         SlowBuffer[i] = slow0;
 
         // 2. Cross Detection (only on closed bars or current bar)
-        bool buy_signal = (fast1 <= slow1 && fast0 > slow0);
-        bool sell_signal = (fast1 >= slow1 && fast0 < slow0);
+        bool buy_cross = (fast1 <= slow1 && fast0 > slow0);
+        bool sell_cross = (fast1 >= slow1 && fast0 < slow0);
 
-        // 3. Signal Placement (Objects)
-        if(buy_signal)
+        // 3. Trade Simulation & Profit Calculation
+        if(buy_cross)
         {
+            if(current_trade_type == 2) // Close Sell
+            {
+                closed_profit_pips + = (entry_price - close[i]) / Point;
+            }
+            entry_price = close[i];
+            current_trade_type = 1;
             SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
         }
-        else if(sell_signal)
+        else if(sell_cross)
         {
+            if(current_trade_type == 1) // Close Buy
+            {
+                closed_profit_pips + = (close[i] - entry_price) / Point;
+            }
+            entry_price = close[i];
+            current_trade_type = 2;
             SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
         }
     }
 
+    // 4. Calculate Open Profit
+    double open_pips = 0;
+    if(current_trade_type == 1) open_pips = (Bid - entry_price) / Point;
+    else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
+
     // Update Status Label
-    double current_diff = (FastBuffer[0] - SlowBuffer[0]) / Point;
-    string infoStr = "MACross(" + IntegerToString(FastPeriod) + " / " + IntegerToString(SlowPeriod) + ")\n" +
-    "Diff: " + DoubleToString(current_diff, 1) + " pips";
+    string trade_type_str = "None";
+    if(current_trade_type == 1) trade_type_str = "BUY";
+    if(current_trade_type == 2) trade_type_str = "SELL";
+
+    string infoStr = "MACross Signals Profit\n" +
+    "Closed: " + DoubleToString(closed_profit_pips, 1) + " pips\n" +
+    "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 1) + " pips\n" +
+    "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 1) + " pips";
     
     SetLabel("Status", infoStr, clrWhite, 10, 10, 10);
     Comment(infoStr);

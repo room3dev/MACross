@@ -6,8 +6,9 @@ Professional 2 Moving Average Crossover indicator with signal arrows on chart.
 
 - **Dual Moving Averages**: Customizable Fast and Slow MA periods (SMA, EMA, etc.).
 - **Signal Arrows**: Automatic Buy (Up) and Sell (Down) arrows plotted at crossover points.
-- **Profit Tracking**: Calculates cumulative historical profit from all previous signals (using opposite signals as exits) and live floating profit for the active signal.
-- **Status Dashboard**: An on-chart label and comment showing Closed Profit, Current Trade Profit, and Total Net Profit in pips.
+- **Profit Tracking Dashboard**: Real-time display of closed, open, and total net profit in pips.
+- **Advanced Statistics**: View record consecutive wins/losses and biggest individual trade win/loss.
+- **On-Chart Labels**: Historical trade profit displayed directly near signal arrows for easy verification.
 - **Efficient Calculation**: Optimized to process only new data on each tick and simulate historical "trades".
 - **Clean Cleanup**: Automatically removes all chart objects when the indicator is removed.
 

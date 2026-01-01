@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACross"
-#property version     "1.09"
+#property version     "1.10"
 #property strict
 #property indicator_chart_window
 
@@ -112,6 +112,14 @@ int OnCalculate(const int rates_total,
     int current_trade_type = 0; // 0=None, 1=Buy, 2=Sell
     double entry_price = 0;
     
+    // Stats variables
+    double max_win = 0;
+    double max_loss = 0;
+    int cur_win_streak = 0;
+    int cur_loss_streak = 0;
+    int max_win_streak = 0;
+    int max_loss_streak = 0;
+
     // We calculate from oldest to newest to track "trades"
     for(int i = rates_total - SlowPeriod - 2; i >= 0; i--)
     {
@@ -135,7 +143,25 @@ int OnCalculate(const int rates_total,
             {
                 double trade_profit = (entry_price - close[i]) / Point;
                 closed_profit_pips += trade_profit;
-                if(ShowHistoryProfit) SetProfitText(i, time[i], low[i], trade_profit, 2); // 2 = Sell
+                
+                // Update Stats
+                if(trade_profit > max_win) max_win = trade_profit;
+                if(trade_profit < max_loss) max_loss = trade_profit;
+                
+                if(trade_profit > 0)
+                {
+                    cur_win_streak++;
+                    cur_loss_streak = 0;
+                    if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
+                }
+                else if(trade_profit < 0)
+                {
+                    cur_loss_streak++;
+                    cur_win_streak = 0;
+                    if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
+                }
+
+                if(ShowHistoryProfit) SetProfitText(time[i], low[i], trade_profit, 2); // 2 = Sell
             }
             entry_price = close[i];
             current_trade_type = 1;
@@ -147,7 +173,25 @@ int OnCalculate(const int rates_total,
             {
                 double trade_profit = (close[i] - entry_price) / Point;
                 closed_profit_pips += trade_profit;
-                if(ShowHistoryProfit) SetProfitText(i, time[i], high[i], trade_profit, 1); // 1 = Buy
+                
+                // Update Stats
+                if(trade_profit > max_win) max_win = trade_profit;
+                if(trade_profit < max_loss) max_loss = trade_profit;
+                
+                if(trade_profit > 0)
+                {
+                    cur_win_streak++;
+                    cur_loss_streak = 0;
+                    if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
+                }
+                else if(trade_profit < 0)
+                {
+                    cur_loss_streak++;
+                    cur_win_streak = 0;
+                    if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
+                }
+
+                if(ShowHistoryProfit) SetProfitText(time[i], high[i], trade_profit, 1); // 1 = Buy
             }
             entry_price = close[i];
             current_trade_type = 2;
@@ -169,11 +213,27 @@ int OnCalculate(const int rates_total,
 
         // Add extra vertical gap after the header
         int header_gap = int(LineSpacing * 0.8);
+        int current_y = YMargin;
 
-        SetLabel("Header", "MACross Signals Profit", clrWhite, FontSize + 2, XMargin, YMargin);
-        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + LineSpacing + header_gap);
-        SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 2) + header_gap);
-        SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 3) + header_gap);
+        SetLabel("Header", "MACross Signals Profit", clrWhite, FontSize + 2, XMargin, current_y);
+        current_y += LineSpacing + header_gap;
+        
+        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips", clrWhite, FontSize, XMargin, current_y);
+        current_y += LineSpacing;
+        
+        SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, current_y);
+        current_y += LineSpacing;
+        
+        SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips", clrWhite, FontSize, XMargin, current_y);
+        current_y += LineSpacing + header_gap; // Extra gap before stats
+        
+        SetLabel("Line4", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
+        current_y += LineSpacing;
+        
+        SetLabel("Line5", "Max Consec Wins: " + IntegerToString(max_win_streak), clrLime, FontSize-1, XMargin, current_y);
+        current_y += LineSpacing;
+        
+        SetLabel("Line6", "Max Consec Loss: " + IntegerToString(max_loss_streak), clrRed, FontSize-1, XMargin, current_y);
         
         Comment("Closed: " + DoubleToString(closed_profit_pips, 0) + "\n" +
                 "Current: " + DoubleToString(open_pips, 0) + "\n" +
@@ -212,38 +272,26 @@ void SetArrow(string type, int idx, datetime t, double lowVal, double highVal, c
 //+------------------------------------------------------------------+
 //| Create or update profit text                                     |
 //+------------------------------------------------------------------+
-void SetProfitText(int idx, datetime t, double refPrice, double profit, int tradeType)
+void SetProfitText(datetime t, double refPrice, double profit, int tradeType)
 {
     // tradeType: 1=Buy (Closed), 2=Sell (Closed)
-    // If tradeType=2 (Sell closed), we are at a Buy Arrow. Text goes BELOW.
-    // If tradeType=1 (Buy closed), we are at a Sell Arrow. Text goes ABOVE.
-    
-    // Format: "TYPE +Pips"
     string typeStr = (tradeType == 1) ? "BUY" : "SELL";
     string text = typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, 0) + " pips";
-    
-    // Color
     color textColor = (profit >= 0) ? clrLime : clrRed;
-    
-    // Position
-    // ArrowOffsetPips is distance from High/Low to Arrow center/tip.
-    // We want text further out. Let's add another 15 pips or so? Or scale with ArrowOffset.
     int textOffset = ArrowOffsetPips + 15;
     
     double price = 0;
     int anchor = 0;
     
-    if(tradeType == 2) // Closing Sell (At Buy Arrow - Bottom)
+    if(tradeType == 2) // Closing Sell (At Buy Arrow)
     {
-        // Arrow is at Low - ArrowOffset. Text goes below that.
         price = refPrice - textOffset * Point;
-        anchor = 3; // ANCHOR_TOP (So text hangs down from this point? No, standard text anchor behavior)
-        // For OBJ_TEXT, ANCHOR_TOP means the text is physically below the point.
+        anchor = 3; // ANCHOR_TOP
     }
-    else // Closing Buy (At Sell Arrow - Top)
+    else // Closing Buy (At Sell Arrow)
     {
         price = refPrice + textOffset * Point;
-        anchor = 5; // ANCHOR_BOTTOM (Text sits on top of this point)
+        anchor = 5; // ANCHOR_BOTTOM
     }
 
     string name = "[MACross] Profit " + TimeToString(t);
@@ -285,6 +333,9 @@ void DeleteDashboard()
     ObjectDelete("[MACross] Dashboard Line1");
     ObjectDelete("[MACross] Dashboard Line2");
     ObjectDelete("[MACross] Dashboard Line3");
+    ObjectDelete("[MACross] Dashboard Line4");
+    ObjectDelete("[MACross] Dashboard Line5");
+    ObjectDelete("[MACross] Dashboard Line6");
 }
 
 //+------------------------------------------------------------------+

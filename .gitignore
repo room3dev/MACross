@@ -1,0 +1,6 @@
+# MetaTrader 4 / MQL4 GitIgnore
+*.ex4
+*.log
+*.bak
+*.tmp
+mqlcache.dat

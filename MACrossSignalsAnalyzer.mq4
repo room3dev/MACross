@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.15"
+#property version     "1.16"
 #property strict
 #property indicator_chart_window
 
@@ -44,6 +44,12 @@ input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
 input bool        UseHTF_Filter = false;     // Use HTF Filter
 input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
 
+input string      __adr__ = "--- ADR Filter ---"; // [ ADR Filter ]
+input bool        UseADR_Filter = false;    // Use ADR Filter
+input double      MinADR_Upsize = 20.0;     // Min Upsize % for Buy
+input double      MinADR_Downsize = 20.0;   // Min Downsize % for Sell
+input int         ATRPeriod = 15;           // ATR Period for ADR
+
 input string      __money__ = "--- Risk Analyzer ---"; // [ Money ]
 input double      VirtualBalance = 1000;    // Virtual Balance ($)
 input double      VirtualLotSize = 0.01;    // Virtual Lot Size
@@ -70,6 +76,8 @@ int OnInit()
 {
     string shortName = "MAAnalyzer(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")";
     if(UseHTF_Filter) shortName += " [F:" + TimeframeToString(FilterTimeframe) + "]";
+    if(UseADR_Filter) shortName += " [ADR]";
+    
     IndicatorShortName(shortName);
     
     // Setup Buffers
@@ -172,21 +180,46 @@ int OnCalculate(const int rates_total,
         bool buy_cross = (fast1 <= slow1 && fast0 > slow0);
         bool sell_cross = (fast1 >= slow1 && fast0 < slow0);
         
-        // 3. Filter Logic
+        // 3. Filter Logic (HTF + ADR)
         bool buy_allowed = true;
         bool sell_allowed = true;
         
+        // HTF Filter
         if(UseHTF_Filter)
         {
             int htf_bar = iBarShift(NULL, FilterTimeframe, time[i]);
             double htf_fast = iMA(NULL, FilterTimeframe, FastPeriod, 0, FastMethod, FastPrice, htf_bar);
             double htf_slow = iMA(NULL, FilterTimeframe, SlowPeriod, 0, SlowMethod, SlowPrice, htf_bar);
             
-            // If HTF trend is DOWN (Fast < Slow), disallow Buys
             if(htf_fast < htf_slow) buy_allowed = false;
-            
-            // If HTF trend is UP (Fast > Slow), disallow Sells
             if(htf_fast > htf_slow) sell_allowed = false;
+        }
+
+        // ADR Filter
+        if(UseADR_Filter)
+        {
+             // Determine start of day for bar i
+             int day_shift = iBarShift(NULL, PERIOD_D1, time[i]);
+             double daily_open = iOpen(NULL, PERIOD_D1, day_shift);
+             
+             // ADR Calculation (using D1 ATR from 'day_shift + 1' which matches '1' relative to today)
+             // Careful: We need the ADR value that was available AT that time.
+             // If we are at bar i (say 10:00 AM today), the ADR value comes from yesterday's close.
+             double adr_val = iATR(NULL, PERIOD_D1, ATRPeriod, day_shift + 1) * 1.0; // Pips value if ATR returns price diff? iATR returns price diff.
+             // Wait, iATR returns value in price units (e.g. 0.0050), not pips.
+             
+             double adr_high = daily_open + adr_val;
+             double adr_low = daily_open - adr_val;
+             double range = adr_high - adr_low;
+             
+             if(range > 0)
+             {
+                 double up_size = ((adr_high - close[i]) / range) * 100.0;
+                 double down_size = ((close[i] - adr_low) / range) * 100.0;
+                 
+                 if(up_size < MinADR_Upsize) buy_allowed = false;
+                 if(down_size < MinADR_Downsize) sell_allowed = false;
+             }
         }
 
         // 4. Trade Simulation & Profit Calculation
@@ -200,7 +233,7 @@ int OnCalculate(const int rates_total,
                 total_trades++;
                 
                 // Money Calc
-                double trade_money = trade_profit_points * money_per_point * VirtualLotSize;
+                double trade_money = trade_profit_points * money_per_point * entry_lot;
                 current_balance += trade_money;
                 
                 // Drawdown Update
@@ -269,7 +302,7 @@ int OnCalculate(const int rates_total,
                 total_trades++;
                 
                 // Money Calc
-                double trade_money = trade_profit_points * money_per_point * VirtualLotSize;
+                double trade_money = trade_profit_points * money_per_point * entry_lot;
                 current_balance += trade_money;
                 
                 // Drawdown Update
@@ -338,10 +371,6 @@ int OnCalculate(const int rates_total,
     // Add open profit to temporary current balance for display, but don't commit it to stats yet
     double open_money = open_pips * money_per_point * entry_lot;
     double display_balance = current_balance + open_money;
-    
-    // Update Peak/DD for live display too? Maybe usually stats are on closed, but let's just show closed stats for DD consistency.
-    // Let's keep DD stats based on closed trades to be consistent with backtests, 
-    // but display the current floating balance.
 
     // Update Dashboard or Cleanup
     if(ShowDashboard)
@@ -364,8 +393,10 @@ int OnCalculate(const int rates_total,
         SetLabel("Header", "Signals Analyzer Pro", clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
-        string filter_str = UseHTF_Filter ? "ON (" + TimeframeToString(FilterTimeframe) + ")" : "OFF";
-        SetLabel("Line0", "Filter: " + filter_str, (UseHTF_Filter ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
+        string filter_str = (UseHTF_Filter ? "HTF(" + TimeframeToString(FilterTimeframe) + ")" : "") + (UseADR_Filter ? (UseHTF_Filter ? " + " : "") + "ADR" : "");
+        if(!UseHTF_Filter && !UseADR_Filter) filter_str = "OFF";
+        
+        SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
         // Line 1: Closed Pips | Current Pips

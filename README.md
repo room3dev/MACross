@@ -7,8 +7,9 @@ Professional Moving Average Crossover indicator for MetaTrader 4 that provides n
 - **Dual Moving Averages**: Customizable Fast and Slow MA periods (SMA, EMA, etc.).
 - **Signal Bullets**: Automatic Buy (Green) and Sell (Red) bullets plotted at crossover points.
 - **Signals Analyzer Dashboard**: Real-time display of closed, open, and total net profit in pips, with Win Rate percentage and RR Ratio.
-- **Risk Analyzer**: Simulate 'Virtual Balance' and 'Lot Size' to track Account Balance and Maximum Drawdown (Money & %) historically directly on the chart.
+- **Risk Analyzer**: Simulate 'Virtual Balance' and 'Lot Size' (including **Dynamic Compounding** mode) to track Account Balance and Maximum Drawdown (Money & %) historically directly on the chart.
 - **HTF Filtering**: Option to filter current timeframe signals by the trend of a Higher Timeframe (e.g., only buy on M15 if H4 trend is up).
+- **ADR Filter**: Option to filter trades based on remaining Average Daily Range (Upsize/Downsize %) to avoid buying at the top or selling at the bottom.
 - **Trading History Statistics**: View record Winning/Losing Streaks (count and total pips) and biggest individual trade win/loss.
 - **On-Chart Performance Labels**: Historical trade profit displayed directly near signal arrows for easy verification and backtesting.
 - **Efficient Calculation**: Optimized to process only new data on each tick and simulate historical "trades".

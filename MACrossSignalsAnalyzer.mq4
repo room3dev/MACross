@@ -308,22 +308,34 @@ int OnCalculate(const int rates_total,
         SetLabel("Line0", "Filter: " + filter_str, (UseHTF_Filter ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
-        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips (W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + ")", clrWhite, FontSize, XMargin, current_y);
+        // Line 1: Closed Pips | Current Pips
+        string line1_text = "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips";
+        SetLabel("Line1", line1_text, clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, current_y);
+        // Line 2: W / L / ALL (Moved to new line)
+        string line2_text = "W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + " / ALL: " + IntegerToString(total_trades);
+        SetLabel("Line2", line2_text, clrYellow, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
+        // Line 3: Total Net | WR
         SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; // Extra gap before stats
         
-        SetLabel("Line4", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
+        // Line 4: Avg Win | Avg Loss | RR
+        SetLabel("Line4", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line5", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        // Line 5: Max Win | Max Loss
+        SetLabel("Line5", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line6", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
+        // Line 6: Win Streak
+        SetLabel("Line6", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        current_y += LineSpacing;
+        
+        // Line 7: Loss Streak
+        SetLabel("Line7", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         
         Comment("Win Rate: " + DoubleToString(win_rate, 1) + "%\n" +
                 "Filter: " + filter_str + "\n" +
@@ -447,6 +459,7 @@ void DeleteDashboard()
     ObjectDelete("[MACross] Dashboard Line4");
     ObjectDelete("[MACross] Dashboard Line5");
     ObjectDelete("[MACross] Dashboard Line6");
+    ObjectDelete("[MACross] Dashboard Line7");
 }
 
 //+------------------------------------------------------------------+

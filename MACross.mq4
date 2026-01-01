@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACross"
-#property version     "1.11"
+#property version     "1.12"
 #property strict
 #property indicator_chart_window
 
@@ -117,6 +117,9 @@ int OnCalculate(const int rates_total,
     double max_loss = 0;
     int total_trades = 0;
     int win_trades = 0;
+    int loss_trades = 0;
+    double total_win_pips = 0;
+    double total_loss_pips = 0;
     
     int cur_win_streak = 0;
     int cur_loss_streak = 0;
@@ -159,8 +162,9 @@ int OnCalculate(const int rates_total,
                 if(trade_profit > 0)
                 {
                     win_trades++;
+                    total_win_pips += trade_profit;
                     cur_win_streak++;
-                    if(cur_loss_streak > 0) cur_streak_pips = 0; // Reset pips if streak flipped
+                    if(cur_loss_streak > 0) cur_streak_pips = 0;
                     cur_loss_streak = 0;
                     cur_streak_pips += trade_profit;
                     
@@ -169,6 +173,8 @@ int OnCalculate(const int rates_total,
                 }
                 else
                 {
+                    loss_trades++;
+                    total_loss_pips += MathAbs(trade_profit);
                     cur_loss_streak++;
                     if(cur_win_streak > 0) cur_streak_pips = 0;
                     cur_win_streak = 0;
@@ -199,6 +205,7 @@ int OnCalculate(const int rates_total,
                 if(trade_profit > 0)
                 {
                     win_trades++;
+                    total_win_pips += trade_profit;
                     cur_win_streak++;
                     if(cur_loss_streak > 0) cur_streak_pips = 0;
                     cur_loss_streak = 0;
@@ -209,6 +216,8 @@ int OnCalculate(const int rates_total,
                 }
                 else
                 {
+                    loss_trades++;
+                    total_loss_pips += MathAbs(trade_profit);
                     cur_loss_streak++;
                     if(cur_win_streak > 0) cur_streak_pips = 0;
                     cur_win_streak = 0;
@@ -239,6 +248,11 @@ int OnCalculate(const int rates_total,
         if(current_trade_type == 2) trade_type_str = "SELL";
 
         double win_rate = (total_trades > 0) ? (double)win_trades / total_trades * 100.0 : 0;
+        
+        // Calculate RR Ratio (Avg Win / Avg Loss)
+        double avg_win = (win_trades > 0) ? total_win_pips / win_trades : 0;
+        double avg_loss = (loss_trades > 0) ? total_loss_pips / loss_trades : 0;
+        double rr_ratio = (avg_loss > 0) ? avg_win / avg_loss : 0;
 
         // Add extra vertical gap after the header
         int header_gap = int(LineSpacing * 0.8);
@@ -247,7 +261,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Header", "MACross Signals Profit", clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
-        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips (" + IntegerToString(win_trades) + "/" + IntegerToString(total_trades) + ")", clrWhite, FontSize, XMargin, current_y);
+        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips (W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + ")", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
         SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, current_y);
@@ -256,7 +270,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; // Extra gap before stats
         
-        SetLabel("Line4", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
+        SetLabel("Line4", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
         SetLabel("Line5", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);

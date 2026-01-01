@@ -290,7 +290,9 @@ int OnCalculate(const int rates_total,
     double max_drawdown_percent = 0;
 
     int total_history = ArraySize(trade_history);
-    int startIndex = MathMax(0, total_history - MaxTradesToAnalyze);
+    int startIndex = 0;
+    if(MaxTradesToAnalyze > 0) startIndex = MathMax(0, total_history - MaxTradesToAnalyze);
+    
     int analyzed_count = 0;
 
     for(int j = startIndex; j < total_history; j++)
@@ -367,7 +369,8 @@ int OnCalculate(const int rates_total,
         int header_gap = int(LineSpacing * 0.8);
         int current_y = YMargin;
 
-        SetLabel("Header", "Signals Analyzer Pro [" + IntegerToString(MaxTradesToAnalyze) + "]", clrWhite, FontSize + 2, XMargin, current_y);
+        string limit_str = (MaxTradesToAnalyze > 0) ? " [" + IntegerToString(MaxTradesToAnalyze) + "]" : "";
+        SetLabel("Header", "Signals Analyzer Pro" + limit_str, clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
         string ichi_tf = TimeframeToString(IchimokuTimeframe);

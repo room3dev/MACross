@@ -3,11 +3,11 @@
 //|                   Copyright 2026, MarketRange. All rights reserved. |
 //|                                                                  |
 //| Professional 2 Moving Average Crossover indicator with signal    |
-//| arrows on chart.                                                 |
+//| arrows on chart and profit tracking.                             |
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MarketRange-ADR"
-#property version     "1.00"
+#property version     "1.01"
 #property strict
 #property indicator_chart_window
 
@@ -116,7 +116,7 @@ const int &spread[])
         FastBuffer[i] = fast0;
         SlowBuffer[i] = slow0;
 
-        // 2. Cross Detection (only on closed bars or current bar)
+        // 2. Cross Detection
         bool buy_cross = (fast1 <= slow1 && fast0 > slow0);
         bool sell_cross = (fast1 >= slow1 && fast0 < slow0);
 

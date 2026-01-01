@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACross"
-#property version     "1.05"
+#property version     "1.06"
 #property strict
 #property indicator_chart_window
 

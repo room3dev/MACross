@@ -44,6 +44,10 @@ input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
 input bool        UseHTF_Filter = false;     // Use HTF Filter
 input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
 
+input string      __ichimoku__ = "--- Ichimoku Filter ---"; // [ Ichimoku ]
+input bool        UseIchimokuFilter = false;  // Use Ichimoku Filter
+input ENUM_TIMEFRAMES IchimokuTimeframe = PERIOD_H4; // Ichimoku Timeframe
+
 input string      __adr__ = "--- ADR Filter ---"; // [ ADR Filter ]
 input bool        UseADR_Filter = false;    // Use ADR Filter
 input double      MinADR_Upsize = 20.0;     // Min Upsize % for Buy
@@ -78,6 +82,7 @@ int OnInit()
     string shortName = "MAAnalyzer(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")";
     if(UseHTF_Filter) shortName += " [F:" + TimeframeToString(FilterTimeframe) + "]";
     if(UseADR_Filter) shortName += " [ADR]";
+    if(UseIchimokuFilter) shortName += " [Ichi]";
     
     IndicatorShortName(shortName);
     
@@ -141,6 +146,9 @@ int OnCalculate(const int rates_total,
     int loss_trades = 0;
     double total_win_pips = 0;
     double total_loss_pips = 0;
+    
+    int total_buy_signals = 0;
+    int total_sell_signals = 0;
     
     int cur_win_streak = 0;
     int cur_loss_streak = 0;
@@ -264,6 +272,20 @@ int OnCalculate(const int rates_total,
              }
         }
 
+        // Ichimoku Filter
+        if(UseIchimokuFilter)
+        {
+             int ichi_bar = iBarShift(NULL, IchimokuTimeframe, time[i]);
+             double spanA = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANA, ichi_bar);
+             double spanB = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANB, ichi_bar);
+             
+             // Price must win cloud (above) for Buy
+             if(close[i] <= MathMax(spanA, spanB)) buy_allowed = false;
+             
+             // Price must lose cloud (below) for Sell
+             if(close[i] >= MathMin(spanA, spanB)) sell_allowed = false;
+        }
+
         // 4. Trade Simulation & Profit Calculation
         if(buy_cross)
         {
@@ -323,6 +345,7 @@ int OnCalculate(const int rates_total,
             if(buy_allowed)
             {
                entry_price = close[i];
+               total_buy_signals++;
                if(UseDynamicLot) entry_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
                else entry_lot = VirtualLotSize;
                
@@ -392,6 +415,7 @@ int OnCalculate(const int rates_total,
             if(sell_allowed)
             {
                entry_price = close[i];
+               total_sell_signals++;
                if(UseDynamicLot) entry_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
                else entry_lot = VirtualLotSize;
                
@@ -435,10 +459,13 @@ int OnCalculate(const int rates_total,
         SetLabel("Header", "Signals Analyzer Pro", clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
-        string filter_str = (UseHTF_Filter ? "HTF(" + TimeframeToString(FilterTimeframe) + ")" : "") + (UseADR_Filter ? (UseHTF_Filter ? " + " : "") + "ADR" : "");
-        if(!UseHTF_Filter && !UseADR_Filter) filter_str = "OFF";
+        string ichi_tf = TimeframeToString(IchimokuTimeframe);
+        string filter_str = (UseHTF_Filter ? "HTF(" + TimeframeToString(FilterTimeframe) + ")" : "") + 
+                           (UseADR_Filter ? (UseHTF_Filter ? " + " : "") + "ADR" : "") +
+                           (UseIchimokuFilter ? (UseHTF_Filter || UseADR_Filter ? " + " : "") + "Ichimoku(" + ichi_tf + ")" : "");
+        if(!UseHTF_Filter && !UseADR_Filter && !UseIchimokuFilter) filter_str = "OFF";
         
-        SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
+        SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter || UseIchimokuFilter) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
         // Line 1: Closed Pips | Current Pips
@@ -450,31 +477,36 @@ int OnCalculate(const int rates_total,
         string line2_text = "W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + " / ALL: " + IntegerToString(total_trades);
         SetLabel("Line2", line2_text, clrYellow, FontSize, XMargin, current_y);
         current_y += LineSpacing;
+
+        // Line 3: BUYS / SELLS Count
+        string line3_text = "BUYS: " + IntegerToString(total_buy_signals) + " / SELLS: " + IntegerToString(total_sell_signals);
+        SetLabel("Line3", line3_text, clrAqua, FontSize, XMargin, current_y);
+        current_y += LineSpacing;
         
-        // Line 3: Total Net | WR
-        SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
+        // Line 4: Total Net | WR
+        SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; // Extra gap before stats
         
-        // Line 4: Balance | MaxDD
+        // Line 5: Balance | MaxDD
         double balance_pct = (VirtualBalance > 0) ? ((display_balance - VirtualBalance) / VirtualBalance * 100.0) : 0;
         string bal_str = "Bal: $" + DoubleToString(display_balance, 2) + " (" + (balance_pct >= 0 ? "+" : "") + DoubleToString(balance_pct, 1) + "%)";
-        SetLabel("Line4", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)", clrAqua, FontSize, XMargin, current_y);
+        SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)", clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 5: Avg Win | Avg Loss | RR
-        SetLabel("Line5", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
+        // Line 6: Avg Win | Avg Loss | RR
+        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 6: Max Win | Max Loss
-        SetLabel("Line6", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
+        // Line 7: Max Win | Max Loss
+        SetLabel("Line7", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 7: Win Streak
-        SetLabel("Line7", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        // Line 8: Win Streak
+        SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 8: Loss Streak
-        SetLabel("Line8", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
+        // Line 9: Loss Streak
+        SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         
         Comment("Win Rate: " + DoubleToString(win_rate, 1) + "%\n" +
                 "Balance: $" + DoubleToString(display_balance, 2) + "\n" +
@@ -603,6 +635,7 @@ void DeleteDashboard()
     ObjectDelete("[MACross] Dashboard Line6");
     ObjectDelete("[MACross] Dashboard Line7");
     ObjectDelete("[MACross] Dashboard Line8");
+    ObjectDelete("[MACross] Dashboard Line9");
 }
 
 //+------------------------------------------------------------------+

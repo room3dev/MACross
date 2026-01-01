@@ -375,7 +375,9 @@ int OnCalculate(const int rates_total,
         current_y += LineSpacing + header_gap; // Extra gap before stats
         
         // Line 4: Balance | MaxDD
-        SetLabel("Line4", "Bal: $" + DoubleToString(display_balance, 2) + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)", clrAqua, FontSize, XMargin, current_y);
+        double balance_pct = (VirtualBalance > 0) ? ((display_balance - VirtualBalance) / VirtualBalance * 100.0) : 0;
+        string bal_str = "Bal: $" + DoubleToString(display_balance, 2) + " (" + (balance_pct >= 0 ? "+" : "") + DoubleToString(balance_pct, 1) + "%)";
+        SetLabel("Line4", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)", clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
         // Line 5: Avg Win | Avg Loss | RR

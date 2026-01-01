@@ -47,6 +47,7 @@ input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
 input string      __money__ = "--- Risk Analyzer ---"; // [ Money ]
 input double      VirtualBalance = 1000;    // Virtual Balance ($)
 input double      VirtualLotSize = 0.01;    // Virtual Lot Size
+input bool        UseDynamicLot  = false;   // Dynamic Lot (Compounding)
 
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
 input bool        ShowDashboard = true;     // Show Profit Dashboard
@@ -121,6 +122,7 @@ int OnCalculate(const int rates_total,
     double closed_profit_pips = 0;
     int current_trade_type = 0; // 0=None, 1=Buy, 2=Sell
     double entry_price = 0;
+    double entry_lot = VirtualLotSize;
     
     // Stats variables
     double max_win = 0;
@@ -246,6 +248,9 @@ int OnCalculate(const int rates_total,
             if(buy_allowed)
             {
                entry_price = close[i];
+               if(UseDynamicLot) entry_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
+               else entry_lot = VirtualLotSize;
+               
                current_trade_type = 1; // Open Buy
                SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
             }
@@ -312,6 +317,9 @@ int OnCalculate(const int rates_total,
             if(sell_allowed)
             {
                entry_price = close[i];
+               if(UseDynamicLot) entry_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
+               else entry_lot = VirtualLotSize;
+               
                current_trade_type = 2; // Open Sell
                SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
             }
@@ -328,7 +336,7 @@ int OnCalculate(const int rates_total,
     else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
     
     // Add open profit to temporary current balance for display, but don't commit it to stats yet
-    double open_money = open_pips * money_per_point * VirtualLotSize;
+    double open_money = open_pips * money_per_point * entry_lot;
     double display_balance = current_balance + open_money;
     
     // Update Peak/DD for live display too? Maybe usually stats are on closed, but let's just show closed stats for DD consistency.

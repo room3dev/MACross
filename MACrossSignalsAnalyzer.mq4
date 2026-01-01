@@ -487,10 +487,11 @@ int OnCalculate(const int rates_total,
         SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; // Extra gap before stats
         
-        // Line 5: Balance | MaxDD
+        // Line 5: Balance | MaxDD | SL
         double balance_pct = (VirtualBalance > 0) ? ((display_balance - VirtualBalance) / VirtualBalance * 100.0) : 0;
         string bal_str = "Bal: $" + DoubleToString(display_balance, 2) + " (" + (balance_pct >= 0 ? "+" : "") + DoubleToString(balance_pct, 1) + "%)";
-        SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)", clrAqua, FontSize, XMargin, current_y);
+        string sl_str = (FixedStopLoss > 0) ? " | SL: " + IntegerToString(FixedStopLoss) + " pips" : "";
+        SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)" + sl_str, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
         // Line 6: Avg Win | Avg Loss | RR

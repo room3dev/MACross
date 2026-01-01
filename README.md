@@ -29,10 +29,20 @@ Advanced Moving Average Crossover indicator for MetaTrader 4, providing real-tim
 
 ## Parameters
 
-- **Fast MA**: Period, Method, Applied Price, Color, Size.
-- **Slow MA**: Period, Method, Applied Price, Color, Size.
-- **Signals**: Buy/Sell Arrow Colors, Arrow Size, Arrow Offset (Pips).
-- **Dashboard**: Toggle Visibility, X/Y Margins, Font Size.
+### Moving Averages
+- **FastPeriod / SlowPeriod**: Periods for the crossover calculation.
+- **FastMethod / SlowMethod**: MA type (EMA, SMA, SMMA, LWMA).
+
+### Signal Filters
+- **UseHTF_Filter**: Enables trend filtering from a **Higher Timeframe**.
+- **UseIchimokuFilter**: Filters signals based on price position relative to the **Kumo Cloud**.
+- **UseADR_Filter**: Prevents entries if the remaining **Average Daily Range** is insufficient.
+
+### Risk & Statistics
+- **VirtualBalance**: Starting balance for monetary simulator.
+- **UseDynamicLot**: Enables **Compounding** (Lot size grows with balance).
+- **FixedStopLoss**: Automatically "closes" trades if loss exceeds these pips at bar close.
+- **MaxTradesToAnalyze**: Limits dashboard stats to the most recent **X** trades (0 = All).
 
 ## License
 

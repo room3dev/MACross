@@ -6,8 +6,8 @@
 //| arrows on chart and configurable profit tracking dashboard.      |
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
-#property link        "https://github.com/room3dev/MarketRange-ADR"
-#property version     "1.03"
+#property link        "https://github.com/room3dev/MACross"
+#property version     "1.04"
 #property strict
 #property indicator_chart_window
 
@@ -44,6 +44,7 @@ input bool ShowDashboard = true; // Show Profit Dashboard
 input int XMargin = 10; // Text Margin X(Pixels)
 input int YMargin = 10; // Text Margin Y(Pixels)
 input int FontSize = 10; // Dashboard Font Size
+input int LineSpacing = 15; // Vertical Line Spacing
 
 //--- Buffers
 double FastBuffer[];
@@ -161,17 +162,18 @@ const int &spread[])
         if(current_trade_type == 1) trade_type_str = "BUY";
         if(current_trade_type == 2) trade_type_str = "SELL";
 
-        string infoStr = "MACross Signals Profit\n" +
-        "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips\n" +
-        "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips\n" +
-        "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips";
+        SetLabel("Header", "MACross Signals Profit", clrWhite, FontSize + 2, XMargin, YMargin);
+        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + LineSpacing);
+        SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 2));
+        SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 3));
         
-        SetLabel("Status", infoStr, clrWhite, FontSize, XMargin, YMargin);
-        Comment(infoStr);
+        Comment("Closed: " + DoubleToString(closed_profit_pips, 0) + "\n" +
+        "Current: " + DoubleToString(open_pips, 0) + "\n" +
+        "Total: " + DoubleToString(closed_profit_pips + open_pips, 0));
     }
     else
     {
-        ObjectDelete("[MACross] Status Label");
+        DeleteDashboard();
         Comment("");
     }
 
@@ -204,7 +206,7 @@ void SetArrow(string type, int idx, datetime t, double lowVal, double highVal, c
 //+------------------------------------------------------------------+
 void SetLabel(string text, string val, color col, int size, int x, int y)
 {
-    string name = "[MACross] " + text + " Label";
+    string name = "[MACross] Dashboard " + text;
     if(ObjectFind(name) == - 1)
     {
         ObjectCreate(name, OBJ_LABEL, 0, 0, 0);
@@ -215,6 +217,17 @@ void SetLabel(string text, string val, color col, int size, int x, int y)
     ObjectSetText(name, val, size, "Arial Bold", col);
     ObjectSet(name, OBJPROP_XDISTANCE, x);
     ObjectSet(name, OBJPROP_YDISTANCE, y);
+}
+
+//+------------------------------------------------------------------+
+//| Delete dashboard labels                                          |
+//+------------------------------------------------------------------+
+void DeleteDashboard()
+{
+    ObjectDelete("[MACross] Dashboard Header");
+    ObjectDelete("[MACross] Dashboard Line1");
+    ObjectDelete("[MACross] Dashboard Line2");
+    ObjectDelete("[MACross] Dashboard Line3");
 }
 
 //+------------------------------------------------------------------+

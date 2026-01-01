@@ -7,9 +7,16 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.19"
+#property version     "1.20"
 #property strict
 #property indicator_chart_window
+
+//--- Enums
+enum ENUM_BIAS {
+    BIAS_BOTH = 0,   // Both (Normal)
+    BIAS_BUY = 1,    // Buy Only
+    BIAS_SELL = 2    // Sell Only
+};
 
 //--- Buffers (Hidden for line plotting only)
 #property indicator_buffers 2
@@ -43,6 +50,7 @@ input bool        ShowHistoryProfit = true; // Show Profit on Chart
 input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
 input bool        UseHTF_Filter = false;     // Use HTF Filter
 input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
+input ENUM_BIAS   MarketBias = BIAS_BOTH;   // Market Bias Direction
 
 input string      __ichimoku__ = "--- Ichimoku Filter ---"; // [ Ichimoku ]
 input bool        UseIchimokuFilter = false;  // Use Ichimoku Filter
@@ -84,6 +92,7 @@ int OnInit()
     if(UseHTF_Filter) shortName += " [F:" + TimeframeToString(FilterTimeframe) + "]";
     if(UseADR_Filter) shortName += " [ADR]";
     if(UseIchimokuFilter) shortName += " [Ichimoku]";
+    if(MarketBias != BIAS_BOTH) shortName += " [" + (MarketBias == BIAS_BUY ? "BUY" : "SELL") + "]";
     
     IndicatorShortName(shortName);
     
@@ -193,43 +202,46 @@ int OnCalculate(const int rates_total,
             }
         }
         
-        // 3. Filter Logic (HTF + ADR + Ichimoku)
-        bool buy_allowed = true;
-        bool sell_allowed = true;
+        // 3. Filter Logic (HTF + ADR + Ichimoku + Bias)
+        bool buy_allowed = (MarketBias != BIAS_SELL);
+        bool sell_allowed = (MarketBias != BIAS_BUY);
         
-        if(UseHTF_Filter)
+        if(buy_allowed || sell_allowed) 
         {
-            int htf_bar = iBarShift(NULL, FilterTimeframe, time[i]);
-            double htf_fast = iMA(NULL, FilterTimeframe, FastPeriod, 0, FastMethod, FastPrice, htf_bar);
-            double htf_slow = iMA(NULL, FilterTimeframe, SlowPeriod, 0, SlowMethod, SlowPrice, htf_bar);
-            if(htf_fast < htf_slow) buy_allowed = false;
-            if(htf_fast > htf_slow) sell_allowed = false;
-        }
+            if(UseHTF_Filter)
+            {
+                int htf_bar = iBarShift(NULL, FilterTimeframe, time[i]);
+                double htf_fast = iMA(NULL, FilterTimeframe, FastPeriod, 0, FastMethod, FastPrice, htf_bar);
+                double htf_slow = iMA(NULL, FilterTimeframe, SlowPeriod, 0, SlowMethod, SlowPrice, htf_bar);
+                if(htf_fast < htf_slow) buy_allowed = false;
+                if(htf_fast > htf_slow) sell_allowed = false;
+            }
 
-        if(UseADR_Filter)
-        {
-             int day_shift = iBarShift(NULL, PERIOD_D1, time[i]);
-             double daily_open = iOpen(NULL, PERIOD_D1, day_shift);
-             double adr_val = iATR(NULL, PERIOD_D1, ATRPeriod, day_shift + 1);
-             double adr_high = daily_open + adr_val;
-             double adr_low = daily_open - adr_val;
-             double range = adr_high - adr_low;
-             if(range > 0)
-             {
-                 double up_size = ((adr_high - close[i]) / range) * 100.0;
-                 double down_size = ((close[i] - adr_low) / range) * 100.0;
-                 if(up_size < MinADR_Upsize) buy_allowed = false;
-                 if(down_size < MinADR_Downsize) sell_allowed = false;
-             }
-        }
-        
-        if(UseIchimokuFilter)
-        {
-             int ichi_bar = iBarShift(NULL, IchimokuTimeframe, time[i]);
-             double spanA = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANA, ichi_bar);
-             double spanB = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANB, ichi_bar);
-             if(close[i] <= MathMax(spanA, spanB)) buy_allowed = false;
-             if(close[i] >= MathMin(spanA, spanB)) sell_allowed = false;
+            if(UseADR_Filter)
+            {
+                 int day_shift = iBarShift(NULL, PERIOD_D1, time[i]);
+                 double daily_open = iOpen(NULL, PERIOD_D1, day_shift);
+                 double adr_val = iATR(NULL, PERIOD_D1, ATRPeriod, day_shift + 1);
+                 double adr_high = daily_open + adr_val;
+                 double adr_low = daily_open - adr_val;
+                 double range = adr_high - adr_low;
+                 if(range > 0)
+                 {
+                     double up_size = ((adr_high - close[i]) / range) * 100.0;
+                     double down_size = ((close[i] - adr_low) / range) * 100.0;
+                     if(up_size < MinADR_Upsize) buy_allowed = false;
+                     if(down_size < MinADR_Downsize) sell_allowed = false;
+                 }
+            }
+            
+            if(UseIchimokuFilter)
+            {
+                 int ichi_bar = iBarShift(NULL, IchimokuTimeframe, time[i]);
+                 double spanA = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANA, ichi_bar);
+                 double spanB = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANB, ichi_bar);
+                 if(close[i] <= MathMax(spanA, spanB)) buy_allowed = false;
+                 if(close[i] >= MathMin(spanA, spanB)) sell_allowed = false;
+            }
         }
 
         // 4. Trade Simulation
@@ -401,13 +413,14 @@ int OnCalculate(const int rates_total,
         SetLabel("Header", "Signals Analyzer Pro" + limit_str, clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
+        string bias_str = (MarketBias == BIAS_BUY) ? "[Bias: BUY] " : (MarketBias == BIAS_SELL ? "[Bias: SELL] " : "");
         string ichi_tf = TimeframeToString(IchimokuTimeframe);
-        string filter_str = (UseHTF_Filter ? "HTF(" + TimeframeToString(FilterTimeframe) + ")" : "") + 
+        string filter_str = bias_str + (UseHTF_Filter ? "HTF(" + TimeframeToString(FilterTimeframe) + ")" : "") + 
                            (UseADR_Filter ? (UseHTF_Filter ? " + " : "") + "ADR" : "") +
                            (UseIchimokuFilter ? (UseHTF_Filter || UseADR_Filter ? " + " : "") + "Ichimoku(" + ichi_tf + ")" : "");
-        if(!UseHTF_Filter && !UseADR_Filter && !UseIchimokuFilter) filter_str = "OFF";
+        if(MarketBias == BIAS_BOTH && !UseHTF_Filter && !UseADR_Filter && !UseIchimokuFilter) filter_str = "OFF";
         
-        SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter || UseIchimokuFilter) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
+        SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter || UseIchimokuFilter || MarketBias != BIAS_BOTH) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
         string line1_text = "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips";

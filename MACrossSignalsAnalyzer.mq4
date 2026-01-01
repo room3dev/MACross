@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.18"
+#property version     "1.19"
 #property strict
 #property indicator_chart_window
 
@@ -141,12 +141,11 @@ int OnCalculate(const int rates_total,
     
     // History Tracking
     double trade_history_pips[];
-    int trade_history_bars[];
+    int    trade_history_bars[];
+    int    trade_history_type[]; // 1=Buy, 2=Sell
     ArrayResize(trade_history_pips, 0);
     ArrayResize(trade_history_bars, 0);
-    
-    int total_buy_signals = 0;
-    int total_sell_signals = 0;
+    ArrayResize(trade_history_type, 0);
     
     // Money Params
     double tick_value = MarketInfo(Symbol(), MODE_TICKVALUE);
@@ -184,8 +183,10 @@ int OnCalculate(const int rates_total,
                 int sz = ArraySize(trade_history_pips);
                 ArrayResize(trade_history_pips, sz + 1);
                 ArrayResize(trade_history_bars, sz + 1);
+                ArrayResize(trade_history_type, sz + 1);
                 trade_history_pips[sz] = floating_pips;
                 trade_history_bars[sz] = entry_idx - i;
+                trade_history_type[sz] = current_trade_type;
 
                 if(ShowHistoryProfit) SetProfitText(time[i], close[i], floating_pips, (current_trade_type == 1 ? 3 : 4));
                 current_trade_type = 0;
@@ -240,15 +241,16 @@ int OnCalculate(const int rates_total,
                 int sz = ArraySize(trade_history_pips);
                 ArrayResize(trade_history_pips, sz + 1);
                 ArrayResize(trade_history_bars, sz + 1);
+                ArrayResize(trade_history_type, sz + 1);
                 trade_history_pips[sz] = pips;
                 trade_history_bars[sz] = entry_idx - i;
+                trade_history_type[sz] = 2; // Was Sell
                 if(ShowHistoryProfit) SetProfitText(time[i], low[i], pips, 2);
             }
             if(buy_allowed)
             {
                entry_price = close[i];
                entry_idx = i;
-               total_buy_signals++;
                current_trade_type = 1; 
                SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
             }
@@ -262,15 +264,16 @@ int OnCalculate(const int rates_total,
                 int sz = ArraySize(trade_history_pips);
                 ArrayResize(trade_history_pips, sz + 1);
                 ArrayResize(trade_history_bars, sz + 1);
+                ArrayResize(trade_history_type, sz + 1);
                 trade_history_pips[sz] = pips;
                 trade_history_bars[sz] = entry_idx - i;
+                trade_history_type[sz] = 1; // Was Buy
                 if(ShowHistoryProfit) SetProfitText(time[i], high[i], pips, 1);
             }
             if(sell_allowed)
             {
                entry_price = close[i];
                entry_idx = i;
-               total_sell_signals++;
                current_trade_type = 2; 
                SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
             }
@@ -290,6 +293,9 @@ int OnCalculate(const int rates_total,
     double cur_streak_pips = 0;
     double max_win_streak_pips = 0, max_loss_streak_pips = 0;
     
+    int buys_in_window = 0;
+    int sells_in_window = 0;
+    
     long total_bars_win = 0;
     long total_bars_loss = 0;
     long total_bars_all = 0;
@@ -308,10 +314,14 @@ int OnCalculate(const int rates_total,
     {
         double pips = trade_history_pips[j];
         int bars = trade_history_bars[j];
+        int type = trade_history_type[j];
         
         closed_profit_pips += pips;
         total_bars_all += bars;
         analyzed_count++;
+        
+        if(type == 1) buys_in_window++;
+        else if(type == 2) sells_in_window++;
         
         // Money Analysis
         double current_lot = VirtualLotSize;
@@ -408,7 +418,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line2", line2_text, clrYellow, FontSize, XMargin, current_y);
         current_y += LineSpacing;
 
-        string line3_text = "TOTAL BUYS: " + IntegerToString(total_buy_signals) + " / SELLS: " + IntegerToString(total_sell_signals);
+        string line3_text = "BUYS: " + IntegerToString(buys_in_window) + " / SELLS: " + IntegerToString(sells_in_window);
         SetLabel("Line3", line3_text, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         

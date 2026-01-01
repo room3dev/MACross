@@ -1,8 +1,10 @@
 # MA Cross Signals Analyzer
 
-Professional Moving Average Crossover indicator for MetaTrader 4 that provides not only signal arrows but a comprehensive performance breakdown.
+Advanced Moving Average Crossover indicator for MetaTrader 4, providing real-time profit analysis, risk management tools, and comprehensive trading statistics.
 
-## Features
+![MA Cross Signals Analyzer Dashboard](screenshot.png)
+
+## Key Features
 
 - **Dual Moving Averages**: Customizable Fast and Slow MA periods (SMA, EMA, etc.).
 - **Signal Bullets**: Automatic Buy (Green) and Sell (Red) bullets plotted at crossover points.

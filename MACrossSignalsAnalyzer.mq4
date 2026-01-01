@@ -364,7 +364,7 @@ string TimeframeToString(ENUM_TIMEFRAMES tf)
 void SetArrow(string type, int idx, datetime t, double lowVal, double highVal, color col, int size, bool isBuy)
 {
     double price = isBuy ? lowVal - ArrowOffsetPips * Point : highVal + ArrowOffsetPips * Point;
-    int code = isBuy ? 233 : 234; // Wingdings codes for up/down arrows
+    int code = 108; // Wingdings code for bullet (circle)
     string name = "[MACross] " + type + " signal @ " + TimeToString(t);
 
     if(ObjectFind(name) == -1)

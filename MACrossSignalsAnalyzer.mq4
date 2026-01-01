@@ -54,6 +54,7 @@ input string      __money__ = "--- Risk Analyzer ---"; // [ Money ]
 input double      VirtualBalance = 1000;    // Virtual Balance ($)
 input double      VirtualLotSize = 0.01;    // Virtual Lot Size
 input bool        UseDynamicLot  = false;   // Dynamic Lot (Compounding)
+input int         FixedStopLoss  = 0;       // Fixed Stop Loss (Pips, 0=Off)
 
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
 input bool        ShowDashboard = true;     // Show Profit Dashboard
@@ -179,6 +180,47 @@ int OnCalculate(const int rates_total,
         // 2. Cross Detection
         bool buy_cross = (fast1 <= slow1 && fast0 > slow0);
         bool sell_cross = (fast1 >= slow1 && fast0 < slow0);
+        
+        // 2.1 Stop Loss Check (At Bar Close)
+        if(FixedStopLoss > 0 && current_trade_type != 0)
+        {
+            double floating_pips = 0;
+            if(current_trade_type == 1) floating_pips = (close[i] - entry_price) / Point;
+            else if(current_trade_type == 2) floating_pips = (entry_price - close[i]) / Point;
+            
+            if(floating_pips <= -FixedStopLoss)
+            {
+                double trade_profit_points = floating_pips;
+                closed_profit_pips += trade_profit_points;
+                total_trades++;
+                
+                double trade_money = trade_profit_points * money_per_point * entry_lot;
+                current_balance += trade_money;
+                if(current_balance > peak_balance) peak_balance = current_balance;
+                double drawdown = peak_balance - current_balance;
+                if(drawdown > max_drawdown_money) 
+                {
+                    max_drawdown_money = drawdown;
+                    max_drawdown_percent = (peak_balance > 0) ? (drawdown / peak_balance * 100.0) : 0;
+                }
+                
+                if(trade_profit_points > max_win) max_win = trade_profit_points;
+                if(trade_profit_points < max_loss) max_loss = trade_profit_points;
+                
+                loss_trades++;
+                total_loss_pips += MathAbs(trade_profit_points);
+                cur_loss_streak++;
+                if(cur_win_streak > 0) cur_streak_pips = 0;
+                cur_win_streak = 0;
+                cur_streak_pips += trade_profit_points;
+                
+                if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
+                if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
+
+                if(ShowHistoryProfit) SetProfitText(time[i], (current_trade_type == 1 ? close[i] : close[i]), trade_profit_points, (current_trade_type == 1 ? 3 : 4));
+                current_trade_type = 0;
+            }
+        }
         
         // 3. Filter Logic (HTF + ADR)
         bool buy_allowed = true;
@@ -493,21 +535,24 @@ void SetArrow(string type, int idx, datetime t, double lowVal, double highVal, c
 //+------------------------------------------------------------------+
 void SetProfitText(datetime t, double refPrice, double profit, int tradeType)
 {
-    // tradeType: 1=Buy (Closed), 2=Sell (Closed)
-    string typeStr = (tradeType == 1) ? "BUY" : "SELL";
-    string text = typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, 0) + " pips";
+    // tradeType: 1=Buy (Closed), 2=Sell (Closed), 3=Buy SL, 4=Sell SL
+    string typeStr = "BUY";
+    if(tradeType == 2 || tradeType == 4) typeStr = "SELL";
+    
+    string prefix = (tradeType > 2) ? "SL " : "";
+    string text = prefix + typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, 0) + " pips";
     color textColor = (profit >= 0) ? clrLime : clrRed;
     int textOffset = ArrowOffsetPips + 15;
     
     double price = 0;
     int anchor = 0;
     
-    if(tradeType == 2) // Closing Sell (At Buy Arrow)
+    if(tradeType == 2 || tradeType == 3) // Closing Sell (At Buy Arrow) or Buy SL
     {
         price = refPrice - textOffset * Point;
         anchor = 3; // ANCHOR_TOP
     }
-    else // Closing Buy (At Sell Arrow)
+    else // Closing Buy (At Sell Arrow) or Sell SL
     {
         price = refPrice + textOffset * Point;
         anchor = 5; // ANCHOR_BOTTOM

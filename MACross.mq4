@@ -44,7 +44,7 @@ input bool ShowDashboard = true; // Show Profit Dashboard
 input int XMargin = 10; // Text Margin X(Pixels)
 input int YMargin = 10; // Text Margin Y(Pixels)
 input int FontSize = 10; // Dashboard Font Size
-input int LineSpacing = 15; // Vertical Line Spacing
+input int LineSpacing = 18; // Vertical Line Spacing
 
 //--- Buffers
 double FastBuffer[];
@@ -132,7 +132,7 @@ const int &spread[])
         {
             if(current_trade_type == 2) // Close Sell
             {
-                closed_profit_pips += (entry_price - close[i]) / Point;
+                closed_profit_pips + = (entry_price - close[i]) / Point;
             }
             entry_price = close[i];
             current_trade_type = 1;
@@ -142,7 +142,7 @@ const int &spread[])
         {
             if(current_trade_type == 1) // Close Buy
             {
-                closed_profit_pips += (close[i] - entry_price) / Point;
+                closed_profit_pips + = (close[i] - entry_price) / Point;
             }
             entry_price = close[i];
             current_trade_type = 2;
@@ -162,10 +162,13 @@ const int &spread[])
         if(current_trade_type == 1) trade_type_str = "BUY";
         if(current_trade_type == 2) trade_type_str = "SELL";
 
+        // Add extra vertical gap after the header
+        int header_gap = int(LineSpacing * 0.8);
+
         SetLabel("Header", "MACross Signals Profit", clrWhite, FontSize + 2, XMargin, YMargin);
-        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + LineSpacing);
-        SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 2));
-        SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 3));
+        SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + LineSpacing + header_gap);
+        SetLabel("Line2", "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 2) + header_gap);
+        SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips", clrWhite, FontSize, XMargin, YMargin + (LineSpacing * 3) + header_gap);
         
         Comment("Closed: " + DoubleToString(closed_profit_pips, 0) + "\n" +
         "Current: " + DoubleToString(open_pips, 0) + "\n" +

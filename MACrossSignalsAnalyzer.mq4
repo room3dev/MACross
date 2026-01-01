@@ -1,3 +1,4 @@
+//+------------------------------------------------------------------+
 //|                                  MACrossSignalsAnalyzer.mq4 |
 //|                   Copyright 2026, MarketRange. All rights reserved. |
 //|                                                                  |
@@ -6,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.13"
+#property version     "1.14"
 #property strict
 #property indicator_chart_window
 
@@ -39,6 +40,10 @@ input int         ArrowSize = 2;            // Arrow Size
 input int         ArrowOffsetPips = 10;     // Arrow Offset (Pips)
 input bool        ShowHistoryProfit = true; // Show Profit on Chart
 
+input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
+input bool        UseHTF_Filter = false;     // Use HTF Filter
+input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
+
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
 input bool        ShowDashboard = true;     // Show Profit Dashboard
 input int         XMargin = 10;             // Text Margin X (Pixels)
@@ -58,7 +63,9 @@ datetime timelastupdate = 0;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    IndicatorShortName("MACrossAnalyzer(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")");
+    string shortName = "MAAnalyzer(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")";
+    if(UseHTF_Filter) shortName += " [F:" + TimeframeToString(FilterTimeframe) + "]";
+    IndicatorShortName(shortName);
     
     // Setup Buffers
     SetIndexBuffer(0, FastBuffer);
@@ -144,11 +151,29 @@ int OnCalculate(const int rates_total,
         // 2. Cross Detection
         bool buy_cross = (fast1 <= slow1 && fast0 > slow0);
         bool sell_cross = (fast1 >= slow1 && fast0 < slow0);
+        
+        // 3. Filter Logic
+        bool buy_allowed = true;
+        bool sell_allowed = true;
+        
+        if(UseHTF_Filter)
+        {
+            int htf_bar = iBarShift(NULL, FilterTimeframe, time[i]);
+            double htf_fast = iMA(NULL, FilterTimeframe, FastPeriod, 0, FastMethod, FastPrice, htf_bar);
+            double htf_slow = iMA(NULL, FilterTimeframe, SlowPeriod, 0, SlowMethod, SlowPrice, htf_bar);
+            
+            // If HTF trend is DOWN (Fast < Slow), disallow Buys
+            if(htf_fast < htf_slow) buy_allowed = false;
+            
+            // If HTF trend is UP (Fast > Slow), disallow Sells
+            if(htf_fast > htf_slow) sell_allowed = false;
+        }
 
-        // 3. Trade Simulation & Profit Calculation
+        // 4. Trade Simulation & Profit Calculation
         if(buy_cross)
         {
-            if(current_trade_type == 2) // Close Sell
+            // ALWAYS check for Exit Signal first (Close Sell)
+            if(current_trade_type == 2) 
             {
                 double trade_profit = (entry_price - close[i]) / Point;
                 closed_profit_pips += trade_profit;
@@ -185,13 +210,23 @@ int OnCalculate(const int rates_total,
 
                 if(ShowHistoryProfit) SetProfitText(time[i], low[i], trade_profit, 2); // 2 = Sell
             }
-            entry_price = close[i];
-            current_trade_type = 1;
-            SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
+            
+            // Check Filter for Entry
+            if(buy_allowed)
+            {
+               entry_price = close[i];
+               current_trade_type = 1; // Open Buy
+               SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
+            }
+            else
+            {
+               current_trade_type = 0; // Go Flat if filtered
+            }
         }
         else if(sell_cross)
         {
-            if(current_trade_type == 1) // Close Buy
+            // ALWAYS check for Exit Signal first (Close Buy)
+            if(current_trade_type == 1) 
             {
                 double trade_profit = (close[i] - entry_price) / Point;
                 closed_profit_pips += trade_profit;
@@ -228,13 +263,22 @@ int OnCalculate(const int rates_total,
 
                 if(ShowHistoryProfit) SetProfitText(time[i], high[i], trade_profit, 1); // 1 = Buy
             }
-            entry_price = close[i];
-            current_trade_type = 2;
-            SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
+            
+            // Check Filter for Entry
+            if(sell_allowed)
+            {
+               entry_price = close[i];
+               current_trade_type = 2; // Open Sell
+               SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
+            }
+            else
+            {
+               current_trade_type = 0; // Go Flat if filtered
+            }
         }
     }
 
-    // 4. Calculate Open Profit
+    // 5. Calculate Open Profit
     double open_pips = 0;
     if(current_trade_type == 1) open_pips = (Bid - entry_price) / Point;
     else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
@@ -253,13 +297,17 @@ int OnCalculate(const int rates_total,
         double avg_loss = (loss_trades > 0) ? total_loss_pips / loss_trades : 0;
         double rr_ratio = (avg_loss > 0) ? avg_win / avg_loss : 0;
 
-        // Add extra vertical gap after the header
+        // Dashboard positioning
         int header_gap = int(LineSpacing * 0.8);
         int current_y = YMargin;
 
         SetLabel("Header", "Signals Analyzer Pro", clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
+        string filter_str = UseHTF_Filter ? "ON (" + TimeframeToString(FilterTimeframe) + ")" : "OFF";
+        SetLabel("Line0", "Filter: " + filter_str, (UseHTF_Filter ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
+        current_y += LineSpacing;
+
         SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips (W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + ")", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
@@ -278,7 +326,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line6", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         
         Comment("Win Rate: " + DoubleToString(win_rate, 1) + "%\n" +
-                "Total Trades: " + IntegerToString(total_trades) + "\n" +
+                "Filter: " + filter_str + "\n" +
                 "Net Pips: " + DoubleToString(closed_profit_pips + open_pips, 0));
     }
     else
@@ -288,6 +336,26 @@ int OnCalculate(const int rates_total,
     }
 
     return(rates_total);
+}
+
+//+------------------------------------------------------------------+
+//| Get timeframe string representation                              |
+//+------------------------------------------------------------------+
+string TimeframeToString(ENUM_TIMEFRAMES tf)
+{
+    switch(tf)
+    {
+        case PERIOD_M1:  return("M1");
+        case PERIOD_M5:  return("M5");
+        case PERIOD_M15: return("M15");
+        case PERIOD_M30: return("M30");
+        case PERIOD_H1:  return("H1");
+        case PERIOD_H4:  return("H4");
+        case PERIOD_D1:  return("D1");
+        case PERIOD_W1:  return("W1");
+        case PERIOD_MN1: return("MN1");
+    }
+    return("Current");
 }
 
 //+------------------------------------------------------------------+
@@ -372,6 +440,7 @@ void SetLabel(string text, string val, color col, int size, int x, int y)
 void DeleteDashboard()
 {
     ObjectDelete("[MACross] Dashboard Header");
+    ObjectDelete("[MACross] Dashboard Line0");
     ObjectDelete("[MACross] Dashboard Line1");
     ObjectDelete("[MACross] Dashboard Line2");
     ObjectDelete("[MACross] Dashboard Line3");

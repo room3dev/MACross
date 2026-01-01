@@ -14,6 +14,7 @@ Advanced Moving Average Crossover indicator for MetaTrader 4, providing real-tim
 - **ADR Filter**: Option to filter trades based on remaining Average Daily Range (Upsize/Downsize %) to avoid buying at the top or selling at the bottom.
 - **Ichimoku Kumo Filter**: Validates signals based on the Ichimoku cloud position (Buy above Cloud, Sell below Cloud) with multi-timeframe support.
 - **Signal Analysis Limit**: Option to limit dashboard statistics to the last **X** trades (default 100) to focus on recent performance.
+- **Average Holding Time**: Displays precisely how many bars on average winning and losing trades are held.
 - **Trading History Statistics**: View record Winning/Losing Streaks (count and total pips) and biggest individual trade win/loss.
 - **On-Chart Performance Labels**: Historical trade profit displayed directly near signal arrows for easy verification and backtesting.
 - **Efficient Calculation**: Optimized to process only new data on each tick and simulate historical "trades".

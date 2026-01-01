@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.17"
+#property version     "1.18"
 #property strict
 #property indicator_chart_window
 
@@ -136,14 +136,17 @@ int OnCalculate(const int rates_total,
     // Reset indicator variables for full re-calculation
     int current_trade_type = 0; // 0=None, 1=Buy, 2=Sell
     double entry_price = 0;
+    int entry_idx = 0;
     double entry_lot = VirtualLotSize;
     
     // History Tracking
-    double trade_history[];
-    ArrayResize(trade_history, 0);
+    double trade_history_pips[];
+    int trade_history_bars[];
+    ArrayResize(trade_history_pips, 0);
+    ArrayResize(trade_history_bars, 0);
+    
     int total_buy_signals = 0;
     int total_sell_signals = 0;
-    int total_trades_all = 0;
     
     // Money Params
     double tick_value = MarketInfo(Symbol(), MODE_TICKVALUE);
@@ -178,10 +181,11 @@ int OnCalculate(const int rates_total,
             
             if(floating_pips <= -FixedStopLoss)
             {
-                int sz = ArraySize(trade_history);
-                ArrayResize(trade_history, sz + 1);
-                trade_history[sz] = floating_pips;
-                total_trades_all++;
+                int sz = ArraySize(trade_history_pips);
+                ArrayResize(trade_history_pips, sz + 1);
+                ArrayResize(trade_history_bars, sz + 1);
+                trade_history_pips[sz] = floating_pips;
+                trade_history_bars[sz] = entry_idx - i;
 
                 if(ShowHistoryProfit) SetProfitText(time[i], close[i], floating_pips, (current_trade_type == 1 ? 3 : 4));
                 current_trade_type = 0;
@@ -233,15 +237,17 @@ int OnCalculate(const int rates_total,
             if(current_trade_type == 2) 
             {
                 double pips = (entry_price - close[i]) / Point;
-                int sz = ArraySize(trade_history);
-                ArrayResize(trade_history, sz + 1);
-                trade_history[sz] = pips;
-                total_trades_all++;
+                int sz = ArraySize(trade_history_pips);
+                ArrayResize(trade_history_pips, sz + 1);
+                ArrayResize(trade_history_bars, sz + 1);
+                trade_history_pips[sz] = pips;
+                trade_history_bars[sz] = entry_idx - i;
                 if(ShowHistoryProfit) SetProfitText(time[i], low[i], pips, 2);
             }
             if(buy_allowed)
             {
                entry_price = close[i];
+               entry_idx = i;
                total_buy_signals++;
                current_trade_type = 1; 
                SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
@@ -253,15 +259,17 @@ int OnCalculate(const int rates_total,
             if(current_trade_type == 1) 
             {
                 double pips = (close[i] - entry_price) / Point;
-                int sz = ArraySize(trade_history);
-                ArrayResize(trade_history, sz + 1);
-                trade_history[sz] = pips;
-                total_trades_all++;
+                int sz = ArraySize(trade_history_pips);
+                ArrayResize(trade_history_pips, sz + 1);
+                ArrayResize(trade_history_bars, sz + 1);
+                trade_history_pips[sz] = pips;
+                trade_history_bars[sz] = entry_idx - i;
                 if(ShowHistoryProfit) SetProfitText(time[i], high[i], pips, 1);
             }
             if(sell_allowed)
             {
                entry_price = close[i];
+               entry_idx = i;
                total_sell_signals++;
                current_trade_type = 2; 
                SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
@@ -282,26 +290,30 @@ int OnCalculate(const int rates_total,
     double cur_streak_pips = 0;
     double max_win_streak_pips = 0, max_loss_streak_pips = 0;
     
-    // Drawdown Calculation (Always full history simulation to be accurate, but stats display limit?)
-    // Actually, user wants stats for last X. So let's simulate money ONLY for the last X.
+    long total_bars_win = 0;
+    long total_bars_loss = 0;
+    long total_bars_all = 0;
+
     double current_balance = VirtualBalance;
     double peak_balance = VirtualBalance;
     double max_drawdown_money = 0;
     double max_drawdown_percent = 0;
 
-    int total_history = ArraySize(trade_history);
+    int total_history = ArraySize(trade_history_pips);
     int startIndex = 0;
     if(MaxTradesToAnalyze > 0) startIndex = MathMax(0, total_history - MaxTradesToAnalyze);
-    
     int analyzed_count = 0;
 
     for(int j = startIndex; j < total_history; j++)
     {
-        double pips = trade_history[j];
+        double pips = trade_history_pips[j];
+        int bars = trade_history_bars[j];
+        
         closed_profit_pips += pips;
+        total_bars_all += bars;
         analyzed_count++;
         
-        // Money Analysis (Compounding respects analyzed start)
+        // Money Analysis
         double current_lot = VirtualLotSize;
         if(UseDynamicLot) current_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
         
@@ -323,6 +335,7 @@ int OnCalculate(const int rates_total,
         {
             win_trades++;
             total_win_pips += pips;
+            total_bars_win += bars;
             cur_win_streak++;
             if(cur_loss_streak > 0) cur_streak_pips = 0;
             cur_loss_streak = 0;
@@ -334,6 +347,7 @@ int OnCalculate(const int rates_total,
         {
             loss_trades++;
             total_loss_pips += MathAbs(pips);
+            total_bars_loss += bars;
             cur_loss_streak++;
             if(cur_win_streak > 0) cur_streak_pips = 0;
             cur_win_streak = 0;
@@ -362,9 +376,13 @@ int OnCalculate(const int rates_total,
         if(current_trade_type == 2) trade_type_str = "SELL";
 
         double win_rate = (analyzed_count > 0) ? (double)win_trades / analyzed_count * 100.0 : 0;
-        double avg_win = (win_trades > 0) ? total_win_pips / win_trades : 0;
-        double avg_loss = (loss_trades > 0) ? total_loss_pips / loss_trades : 0;
-        double rr_ratio = (avg_loss > 0) ? avg_win / avg_loss : 0;
+        double avg_win_pips = (win_trades > 0) ? total_win_pips / win_trades : 0;
+        double avg_loss_pips = (loss_trades > 0) ? total_loss_pips / loss_trades : 0;
+        double rr_ratio = (avg_loss_pips > 0) ? avg_win_pips / avg_loss_pips : 0;
+        
+        double avg_hold_all = (analyzed_count > 0) ? (double)total_bars_all / analyzed_count : 0;
+        double avg_hold_win = (win_trades > 0) ? (double)total_bars_win / win_trades : 0;
+        double avg_hold_loss = (loss_trades > 0) ? (double)total_bars_loss / loss_trades : 0;
 
         int header_gap = int(LineSpacing * 0.8);
         int current_y = YMargin;
@@ -403,7 +421,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)" + sl_str, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
+        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win_pips, 0) + " | Avg Loss: " + DoubleToString(avg_loss_pips, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
         SetLabel("Line7", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
@@ -413,6 +431,10 @@ int OnCalculate(const int rates_total,
         current_y += LineSpacing;
         
         SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
+        current_y += LineSpacing;
+
+        string hold_str = "Avg Hold: ALL: " + DoubleToString(avg_hold_all, 1) + " | W: " + DoubleToString(avg_hold_win, 1) + " | L: " + DoubleToString(avg_hold_loss, 1) + " bars";
+        SetLabel("Line10", hold_str, clrWhite, FontSize-1, XMargin, current_y);
     }
     else DeleteDashboard();
 

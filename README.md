@@ -24,6 +24,7 @@ Professional 2 Moving Average Crossover indicator with signal arrows on chart.
 - **Fast MA**: Period, Method, Applied Price, Color, Size.
 - **Slow MA**: Period, Method, Applied Price, Color, Size.
 - **Signals**: Buy/Sell Arrow Colors, Arrow Size, Arrow Offset (Pips).
+- **Dashboard**: Toggle Visibility, X/Y Margins, Font Size.
 
 ## License
 

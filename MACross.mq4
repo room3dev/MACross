@@ -3,11 +3,11 @@
 //|                   Copyright 2026, MarketRange. All rights reserved. |
 //|                                                                  |
 //| Professional 2 Moving Average Crossover indicator with signal    |
-//| arrows on chart and profit tracking.                             |
+//| arrows on chart and configurable profit tracking dashboard.      |
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MarketRange-ADR"
-#property version     "1.01"
+#property version     "1.02"
 #property strict
 #property indicator_chart_window
 
@@ -38,6 +38,12 @@ input color BuyColor = clrLime; // Buy Arrow Color
 input color SellColor = clrRed; // Sell Arrow Color
 input int ArrowSize = 2; // Arrow Size
 input int ArrowOffsetPips = 10; // Arrow Offset(Pips)
+
+input string __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
+input bool ShowDashboard = true; // Show Profit Dashboard
+input int XMargin = 10; // Text Margin X(Pixels)
+input int YMargin = 10; // Text Margin Y(Pixels)
+input int FontSize = 10; // Dashboard Font Size
 
 //--- Buffers
 double FastBuffer[];
@@ -148,18 +154,26 @@ const int &spread[])
     if(current_trade_type == 1) open_pips = (Bid - entry_price) / Point;
     else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
 
-    // Update Status Label
-    string trade_type_str = "None";
-    if(current_trade_type == 1) trade_type_str = "BUY";
-    if(current_trade_type == 2) trade_type_str = "SELL";
+    // Update Dashboard or Cleanup
+    if(ShowDashboard)
+    {
+        string trade_type_str = "None";
+        if(current_trade_type == 1) trade_type_str = "BUY";
+        if(current_trade_type == 2) trade_type_str = "SELL";
 
-    string infoStr = "MACross Signals Profit\n" +
-    "Closed: " + DoubleToString(closed_profit_pips, 1) + " pips\n" +
-    "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 1) + " pips\n" +
-    "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 1) + " pips";
-    
-    SetLabel("Status", infoStr, clrWhite, 10, 10, 10);
-    Comment(infoStr);
+        string infoStr = "MACross Signals Profit\n" +
+        "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips\n" +
+        "Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips\n" +
+        "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips";
+        
+        SetLabel("Status", infoStr, clrWhite, FontSize, XMargin, YMargin);
+        Comment(infoStr);
+    }
+    else
+    {
+        ObjectDelete("[MACross] Status Label");
+        Comment("");
+    }
 
     return(rates_total);
 }
@@ -194,8 +208,8 @@ void SetLabel(string text, string val, color col, int size, int x, int y)
     if(ObjectFind(name) == - 1)
     {
         ObjectCreate(name, OBJ_LABEL, 0, 0, 0);
-        ObjectSet(name, OBJPROP_CORNER, 1); // Top Right
-        ObjectSet(name, OBJPROP_ANCHOR, 6); // ANCHOR_RIGHT_UP
+        ObjectSet(name, OBJPROP_CORNER, CORNER_TOP_RIGHT);
+        ObjectSet(name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UP);
     }
    
     ObjectSetText(name, val, size, "Arial Bold", col);

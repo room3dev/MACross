@@ -433,7 +433,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
 
-        string hold_str = "Avg Hold: ALL: " + DoubleToString(avg_hold_all, 1) + " | W: " + DoubleToString(avg_hold_win, 1) + " | L: " + DoubleToString(avg_hold_loss, 1) + " bars";
+        string hold_str = "Avg Hold: ALL: " + DoubleToString(avg_hold_all, 0) + " | W: " + DoubleToString(avg_hold_win, 0) + " | L: " + DoubleToString(avg_hold_loss, 0) + " bars";
         SetLabel("Line10", hold_str, clrWhite, FontSize-1, XMargin, current_y);
     }
     else DeleteDashboard();

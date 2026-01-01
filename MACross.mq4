@@ -132,7 +132,7 @@ const int &spread[])
         {
             if(current_trade_type == 2) // Close Sell
             {
-                closed_profit_pips + = (entry_price - close[i]) / Point;
+                closed_profit_pips += (entry_price - close[i]) / Point;
             }
             entry_price = close[i];
             current_trade_type = 1;
@@ -142,7 +142,7 @@ const int &spread[])
         {
             if(current_trade_type == 1) // Close Buy
             {
-                closed_profit_pips + = (close[i] - entry_price) / Point;
+                closed_profit_pips += (close[i] - entry_price) / Point;
             }
             entry_price = close[i];
             current_trade_type = 2;

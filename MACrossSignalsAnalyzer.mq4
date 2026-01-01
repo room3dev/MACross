@@ -1,13 +1,12 @@
-//+------------------------------------------------------------------+
-//|                                                      MACross.mq4 |
+//|                                  MACrossSignalsAnalyzer.mq4 |
 //|                   Copyright 2026, MarketRange. All rights reserved. |
 //|                                                                  |
-//| Professional 2 Moving Average Crossover indicator with signal    |
-//| arrows on chart and configurable profit tracking dashboard.      |
+//| Advanced Moving Average Crossover indicator with profit analysis,|
+//| trading statistics, and on-chart historical performance tracking.|
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
-#property link        "https://github.com/room3dev/MACross"
-#property version     "1.12"
+#property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
+#property version     "1.13"
 #property strict
 #property indicator_chart_window
 
@@ -59,7 +58,7 @@ datetime timelastupdate = 0;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    IndicatorShortName("MACross(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")");
+    IndicatorShortName("MACrossAnalyzer(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")");
     
     // Setup Buffers
     SetIndexBuffer(0, FastBuffer);
@@ -258,7 +257,7 @@ int OnCalculate(const int rates_total,
         int header_gap = int(LineSpacing * 0.8);
         int current_y = YMargin;
 
-        SetLabel("Header", "MACross Signals Profit", clrWhite, FontSize + 2, XMargin, current_y);
+        SetLabel("Header", "Signals Analyzer Pro", clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
         SetLabel("Line1", "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips (W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + ")", clrWhite, FontSize, XMargin, current_y);

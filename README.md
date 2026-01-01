@@ -1,14 +1,14 @@
-# MACross
+# MA Cross Signals Analyzer
 
-Professional 2 Moving Average Crossover indicator with signal arrows on chart.
+Professional Moving Average Crossover indicator for MetaTrader 4 that provides not only signal arrows but a comprehensive performance breakdown.
 
 ## Features
 
 - **Dual Moving Averages**: Customizable Fast and Slow MA periods (SMA, EMA, etc.).
 - **Signal Arrows**: Automatic Buy (Up) and Sell (Down) arrows plotted at crossover points.
-- **Profit Tracking Dashboard**: Real-time display of closed, open, and total net profit in pips, with Win Rate percentage.
-- **Advanced Statistics**: View record Winning/Losing Streaks (count and total pips) and biggest individual trade win/loss.
-- **On-Chart Labels**: Historical trade profit displayed directly near signal arrows for easy verification.
+- **Signals Analyzer Dashboard**: Real-time display of closed, open, and total net profit in pips, with Win Rate percentage and RR Ratio.
+- **Trading History Statistics**: View record Winning/Losing Streaks (count and total pips) and biggest individual trade win/loss.
+- **On-Chart Performance Labels**: Historical trade profit displayed directly near signal arrows for easy verification and backtesting.
 - **Efficient Calculation**: Optimized to process only new data on each tick and simulate historical "trades".
 - **Clean Cleanup**: Automatically removes all chart objects when the indicator is removed.
 

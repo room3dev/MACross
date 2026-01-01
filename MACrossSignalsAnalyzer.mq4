@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.16"
+#property version     "1.17"
 #property strict
 #property indicator_chart_window
 
@@ -59,6 +59,7 @@ input double      VirtualBalance = 1000;    // Virtual Balance ($)
 input double      VirtualLotSize = 0.01;    // Virtual Lot Size
 input bool        UseDynamicLot  = false;   // Dynamic Lot (Compounding)
 input int         FixedStopLoss  = 0;       // Fixed Stop Loss (Pips, 0=Off)
+input int         MaxTradesToAnalyze = 100; // Last X orders for Stats
 
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
 input bool        ShowDashboard = true;     // Show Profit Dashboard
@@ -82,7 +83,7 @@ int OnInit()
     string shortName = "MAAnalyzer(" + IntegerToString(FastPeriod) + "," + IntegerToString(SlowPeriod) + ")";
     if(UseHTF_Filter) shortName += " [F:" + TimeframeToString(FilterTimeframe) + "]";
     if(UseADR_Filter) shortName += " [ADR]";
-    if(UseIchimokuFilter) shortName += " [Ichi]";
+    if(UseIchimokuFilter) shortName += " [Ichimoku]";
     
     IndicatorShortName(shortName);
     
@@ -133,37 +134,16 @@ int OnCalculate(const int rates_total,
     ArraySetAsSeries(close, true);
 
     // Reset indicator variables for full re-calculation
-    double closed_profit_pips = 0;
     int current_trade_type = 0; // 0=None, 1=Buy, 2=Sell
     double entry_price = 0;
     double entry_lot = VirtualLotSize;
     
-    // Stats variables
-    double max_win = 0;
-    double max_loss = 0;
-    int total_trades = 0;
-    int win_trades = 0;
-    int loss_trades = 0;
-    double total_win_pips = 0;
-    double total_loss_pips = 0;
-    
+    // History Tracking
+    double trade_history[];
+    ArrayResize(trade_history, 0);
     int total_buy_signals = 0;
     int total_sell_signals = 0;
-    
-    int cur_win_streak = 0;
-    int cur_loss_streak = 0;
-    int max_win_streak = 0;
-    int max_loss_streak = 0;
-    
-    double cur_streak_pips = 0;
-    double max_win_streak_pips = 0;
-    double max_loss_streak_pips = 0;
-    
-    // Drawdown variables
-    double current_balance = VirtualBalance;
-    double peak_balance = VirtualBalance;
-    double max_drawdown_money = 0;
-    double max_drawdown_percent = 0;
+    int total_trades_all = 0;
     
     // Money Params
     double tick_value = MarketInfo(Symbol(), MODE_TICKVALUE);
@@ -173,7 +153,7 @@ int OnCalculate(const int rates_total,
     double points_per_tick = tick_size / Point;
     double money_per_point = tick_value / points_per_tick;
 
-    // We calculate from oldest to newest to track "trades"
+    // Simulation Loop (Backward: oldest to newest)
     for(int i = rates_total - SlowPeriod - 2; i >= 0; i--)
     {
         // 1. Calculate MA Values
@@ -198,265 +178,196 @@ int OnCalculate(const int rates_total,
             
             if(floating_pips <= -FixedStopLoss)
             {
-                double trade_profit_points = floating_pips;
-                closed_profit_pips += trade_profit_points;
-                total_trades++;
-                
-                double trade_money = trade_profit_points * money_per_point * entry_lot;
-                current_balance += trade_money;
-                if(current_balance > peak_balance) peak_balance = current_balance;
-                double drawdown = peak_balance - current_balance;
-                if(drawdown > max_drawdown_money) 
-                {
-                    max_drawdown_money = drawdown;
-                    max_drawdown_percent = (peak_balance > 0) ? (drawdown / peak_balance * 100.0) : 0;
-                }
-                
-                if(trade_profit_points > max_win) max_win = trade_profit_points;
-                if(trade_profit_points < max_loss) max_loss = trade_profit_points;
-                
-                loss_trades++;
-                total_loss_pips += MathAbs(trade_profit_points);
-                cur_loss_streak++;
-                if(cur_win_streak > 0) cur_streak_pips = 0;
-                cur_win_streak = 0;
-                cur_streak_pips += trade_profit_points;
-                
-                if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
-                if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
+                int sz = ArraySize(trade_history);
+                ArrayResize(trade_history, sz + 1);
+                trade_history[sz] = floating_pips;
+                total_trades_all++;
 
-                if(ShowHistoryProfit) SetProfitText(time[i], (current_trade_type == 1 ? close[i] : close[i]), trade_profit_points, (current_trade_type == 1 ? 3 : 4));
+                if(ShowHistoryProfit) SetProfitText(time[i], close[i], floating_pips, (current_trade_type == 1 ? 3 : 4));
                 current_trade_type = 0;
             }
         }
         
-        // 3. Filter Logic (HTF + ADR)
+        // 3. Filter Logic (HTF + ADR + Ichimoku)
         bool buy_allowed = true;
         bool sell_allowed = true;
         
-        // HTF Filter
         if(UseHTF_Filter)
         {
             int htf_bar = iBarShift(NULL, FilterTimeframe, time[i]);
             double htf_fast = iMA(NULL, FilterTimeframe, FastPeriod, 0, FastMethod, FastPrice, htf_bar);
             double htf_slow = iMA(NULL, FilterTimeframe, SlowPeriod, 0, SlowMethod, SlowPrice, htf_bar);
-            
             if(htf_fast < htf_slow) buy_allowed = false;
             if(htf_fast > htf_slow) sell_allowed = false;
         }
 
-        // ADR Filter
         if(UseADR_Filter)
         {
-             // Determine start of day for bar i
              int day_shift = iBarShift(NULL, PERIOD_D1, time[i]);
              double daily_open = iOpen(NULL, PERIOD_D1, day_shift);
-             
-             // ADR Calculation (using D1 ATR from 'day_shift + 1' which matches '1' relative to today)
-             // Careful: We need the ADR value that was available AT that time.
-             // If we are at bar i (say 10:00 AM today), the ADR value comes from yesterday's close.
-             double adr_val = iATR(NULL, PERIOD_D1, ATRPeriod, day_shift + 1) * 1.0; // Pips value if ATR returns price diff? iATR returns price diff.
-             // Wait, iATR returns value in price units (e.g. 0.0050), not pips.
-             
+             double adr_val = iATR(NULL, PERIOD_D1, ATRPeriod, day_shift + 1);
              double adr_high = daily_open + adr_val;
              double adr_low = daily_open - adr_val;
              double range = adr_high - adr_low;
-             
              if(range > 0)
              {
                  double up_size = ((adr_high - close[i]) / range) * 100.0;
                  double down_size = ((close[i] - adr_low) / range) * 100.0;
-                 
                  if(up_size < MinADR_Upsize) buy_allowed = false;
                  if(down_size < MinADR_Downsize) sell_allowed = false;
              }
         }
-
-        // Ichimoku Filter
+        
         if(UseIchimokuFilter)
         {
              int ichi_bar = iBarShift(NULL, IchimokuTimeframe, time[i]);
              double spanA = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANA, ichi_bar);
              double spanB = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANB, ichi_bar);
-             
-             // Price must win cloud (above) for Buy
              if(close[i] <= MathMax(spanA, spanB)) buy_allowed = false;
-             
-             // Price must lose cloud (below) for Sell
              if(close[i] >= MathMin(spanA, spanB)) sell_allowed = false;
         }
 
-        // 4. Trade Simulation & Profit Calculation
+        // 4. Trade Simulation
         if(buy_cross)
         {
-            // ALWAYS check for Exit Signal first (Close Sell)
             if(current_trade_type == 2) 
             {
-                double trade_profit_points = (entry_price - close[i]) / Point;
-                closed_profit_pips += trade_profit_points;
-                total_trades++;
-                
-                // Money Calc
-                double trade_money = trade_profit_points * money_per_point * entry_lot;
-                current_balance += trade_money;
-                
-                // Drawdown Update
-                if(current_balance > peak_balance) peak_balance = current_balance;
-                double drawdown = peak_balance - current_balance;
-                if(drawdown > max_drawdown_money) 
-                {
-                    max_drawdown_money = drawdown;
-                    max_drawdown_percent = (peak_balance > 0) ? (drawdown / peak_balance * 100.0) : 0;
-                }
-                
-                // Update Stats
-                if(trade_profit_points > max_win) max_win = trade_profit_points;
-                if(trade_profit_points < max_loss) max_loss = trade_profit_points;
-                
-                if(trade_profit_points > 0)
-                {
-                    win_trades++;
-                    total_win_pips += trade_profit_points;
-                    cur_win_streak++;
-                    if(cur_loss_streak > 0) cur_streak_pips = 0;
-                    cur_loss_streak = 0;
-                    cur_streak_pips += trade_profit_points;
-                    
-                    if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
-                    if(cur_streak_pips > max_win_streak_pips) max_win_streak_pips = cur_streak_pips;
-                }
-                else
-                {
-                    loss_trades++;
-                    total_loss_pips += MathAbs(trade_profit_points);
-                    cur_loss_streak++;
-                    if(cur_win_streak > 0) cur_streak_pips = 0;
-                    cur_win_streak = 0;
-                    cur_streak_pips += trade_profit_points;
-                    
-                    if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
-                    if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
-                }
-
-                if(ShowHistoryProfit) SetProfitText(time[i], low[i], trade_profit_points, 2); // 2 = Sell
+                double pips = (entry_price - close[i]) / Point;
+                int sz = ArraySize(trade_history);
+                ArrayResize(trade_history, sz + 1);
+                trade_history[sz] = pips;
+                total_trades_all++;
+                if(ShowHistoryProfit) SetProfitText(time[i], low[i], pips, 2);
             }
-            
-            // Check Filter for Entry
             if(buy_allowed)
             {
                entry_price = close[i];
                total_buy_signals++;
-               if(UseDynamicLot) entry_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
-               else entry_lot = VirtualLotSize;
-               
-               current_trade_type = 1; // Open Buy
+               current_trade_type = 1; 
                SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
             }
-            else
-            {
-               current_trade_type = 0; // Go Flat if filtered
-            }
+            else current_trade_type = 0;
         }
         else if(sell_cross)
         {
-            // ALWAYS check for Exit Signal first (Close Buy)
             if(current_trade_type == 1) 
             {
-                double trade_profit_points = (close[i] - entry_price) / Point;
-                closed_profit_pips += trade_profit_points;
-                total_trades++;
-                
-                // Money Calc
-                double trade_money = trade_profit_points * money_per_point * entry_lot;
-                current_balance += trade_money;
-                
-                // Drawdown Update
-                if(current_balance > peak_balance) peak_balance = current_balance;
-                double drawdown = peak_balance - current_balance;
-                if(drawdown > max_drawdown_money) 
-                {
-                    max_drawdown_money = drawdown;
-                    max_drawdown_percent = (peak_balance > 0) ? (drawdown / peak_balance * 100.0) : 0;
-                }
-                
-                // Update Stats
-                if(trade_profit_points > max_win) max_win = trade_profit_points;
-                if(trade_profit_points < max_loss) max_loss = trade_profit_points;
-                
-                if(trade_profit_points > 0)
-                {
-                    win_trades++;
-                    total_win_pips += trade_profit_points;
-                    cur_win_streak++;
-                    if(cur_loss_streak > 0) cur_streak_pips = 0;
-                    cur_loss_streak = 0;
-                    cur_streak_pips += trade_profit_points;
-                    
-                    if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
-                    if(cur_streak_pips > max_win_streak_pips) max_win_streak_pips = cur_streak_pips;
-                }
-                else
-                {
-                    loss_trades++;
-                    total_loss_pips += MathAbs(trade_profit_points);
-                    cur_loss_streak++;
-                    if(cur_win_streak > 0) cur_streak_pips = 0;
-                    cur_win_streak = 0;
-                    cur_streak_pips += trade_profit_points;
-                    
-                    if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
-                    if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
-                }
-
-                if(ShowHistoryProfit) SetProfitText(time[i], high[i], trade_profit_points, 1); // 1 = Buy
+                double pips = (close[i] - entry_price) / Point;
+                int sz = ArraySize(trade_history);
+                ArrayResize(trade_history, sz + 1);
+                trade_history[sz] = pips;
+                total_trades_all++;
+                if(ShowHistoryProfit) SetProfitText(time[i], high[i], pips, 1);
             }
-            
-            // Check Filter for Entry
             if(sell_allowed)
             {
                entry_price = close[i];
                total_sell_signals++;
-               if(UseDynamicLot) entry_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
-               else entry_lot = VirtualLotSize;
-               
-               current_trade_type = 2; // Open Sell
+               current_trade_type = 2; 
                SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
             }
-            else
-            {
-               current_trade_type = 0; // Go Flat if filtered
-            }
+            else current_trade_type = 0;
         }
     }
 
-    // 5. Calculate Open Profit
+    // 5. Statistics Calculation (Last X Only)
+    double closed_profit_pips = 0;
+    int win_trades = 0;
+    int loss_trades = 0;
+    double total_win_pips = 0;
+    double total_loss_pips = 0;
+    double max_win = 0, max_loss = 0;
+    int cur_win_streak = 0, cur_loss_streak = 0;
+    int max_win_streak = 0, max_loss_streak = 0;
+    double cur_streak_pips = 0;
+    double max_win_streak_pips = 0, max_loss_streak_pips = 0;
+    
+    // Drawdown Calculation (Always full history simulation to be accurate, but stats display limit?)
+    // Actually, user wants stats for last X. So let's simulate money ONLY for the last X.
+    double current_balance = VirtualBalance;
+    double peak_balance = VirtualBalance;
+    double max_drawdown_money = 0;
+    double max_drawdown_percent = 0;
+
+    int total_history = ArraySize(trade_history);
+    int startIndex = MathMax(0, total_history - MaxTradesToAnalyze);
+    int analyzed_count = 0;
+
+    for(int j = startIndex; j < total_history; j++)
+    {
+        double pips = trade_history[j];
+        closed_profit_pips += pips;
+        analyzed_count++;
+        
+        // Money Analysis (Compounding respects analyzed start)
+        double current_lot = VirtualLotSize;
+        if(UseDynamicLot) current_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
+        
+        double trade_money = pips * money_per_point * current_lot;
+        current_balance += trade_money;
+        if(current_balance > peak_balance) peak_balance = current_balance;
+        double dd = peak_balance - current_balance;
+        if(dd > max_drawdown_money)
+        {
+            max_drawdown_money = dd;
+            max_drawdown_percent = (peak_balance > 0) ? (dd / peak_balance * 100.0) : 0;
+        }
+
+        // Stats
+        if(pips > max_win) max_win = pips;
+        if(pips < max_loss) max_loss = pips;
+
+        if(pips > 0)
+        {
+            win_trades++;
+            total_win_pips += pips;
+            cur_win_streak++;
+            if(cur_loss_streak > 0) cur_streak_pips = 0;
+            cur_loss_streak = 0;
+            cur_streak_pips += pips;
+            if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
+            if(cur_streak_pips > max_win_streak_pips) max_win_streak_pips = cur_streak_pips;
+        }
+        else
+        {
+            loss_trades++;
+            total_loss_pips += MathAbs(pips);
+            cur_loss_streak++;
+            if(cur_win_streak > 0) cur_streak_pips = 0;
+            cur_win_streak = 0;
+            cur_streak_pips += pips;
+            if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
+            if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
+        }
+    }
+
+    // 6. Current Open Trade
     double open_pips = 0;
     if(current_trade_type == 1) open_pips = (Bid - entry_price) / Point;
     else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
     
-    // Add open profit to temporary current balance for display, but don't commit it to stats yet
-    double open_money = open_pips * money_per_point * entry_lot;
+    double entry_lot_final = VirtualLotSize;
+    if(UseDynamicLot) entry_lot_final = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
+    
+    double open_money = open_pips * money_per_point * entry_lot_final;
     double display_balance = current_balance + open_money;
 
-    // Update Dashboard or Cleanup
+    // 7. Dashboard
     if(ShowDashboard)
     {
         string trade_type_str = "None";
         if(current_trade_type == 1) trade_type_str = "BUY";
         if(current_trade_type == 2) trade_type_str = "SELL";
 
-        double win_rate = (total_trades > 0) ? (double)win_trades / total_trades * 100.0 : 0;
-        
-        // Calculate RR Ratio (Avg Win / Avg Loss)
+        double win_rate = (analyzed_count > 0) ? (double)win_trades / analyzed_count * 100.0 : 0;
         double avg_win = (win_trades > 0) ? total_win_pips / win_trades : 0;
         double avg_loss = (loss_trades > 0) ? total_loss_pips / loss_trades : 0;
         double rr_ratio = (avg_loss > 0) ? avg_win / avg_loss : 0;
 
-        // Dashboard positioning
         int header_gap = int(LineSpacing * 0.8);
         int current_y = YMargin;
 
-        SetLabel("Header", "Signals Analyzer Pro", clrWhite, FontSize + 2, XMargin, current_y);
+        SetLabel("Header", "Signals Analyzer Pro [" + IntegerToString(MaxTradesToAnalyze) + "]", clrWhite, FontSize + 2, XMargin, current_y);
         current_y += LineSpacing + header_gap;
         
         string ichi_tf = TimeframeToString(IchimokuTimeframe);
@@ -468,63 +379,43 @@ int OnCalculate(const int rates_total,
         SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter || UseIchimokuFilter) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
-        // Line 1: Closed Pips | Current Pips
         string line1_text = "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips";
         SetLabel("Line1", line1_text, clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 2: W / L / ALL (Moved to new line)
-        string line2_text = "W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + " / ALL: " + IntegerToString(total_trades);
+        string line2_text = "W: " + IntegerToString(win_trades) + " / L: " + IntegerToString(loss_trades) + " / ALL: " + IntegerToString(analyzed_count);
         SetLabel("Line2", line2_text, clrYellow, FontSize, XMargin, current_y);
         current_y += LineSpacing;
 
-        // Line 3: BUYS / SELLS Count
-        string line3_text = "BUYS: " + IntegerToString(total_buy_signals) + " / SELLS: " + IntegerToString(total_sell_signals);
+        string line3_text = "TOTAL BUYS: " + IntegerToString(total_buy_signals) + " / SELLS: " + IntegerToString(total_sell_signals);
         SetLabel("Line3", line3_text, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 4: Total Net | WR
         SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
-        current_y += LineSpacing + header_gap; // Extra gap before stats
+        current_y += LineSpacing + header_gap; 
         
-        // Line 5: Balance | MaxDD | SL
         double balance_pct = (VirtualBalance > 0) ? ((display_balance - VirtualBalance) / VirtualBalance * 100.0) : 0;
         string bal_str = "Bal: $" + DoubleToString(display_balance, 2) + " (" + (balance_pct >= 0 ? "+" : "") + DoubleToString(balance_pct, 1) + "%)";
         string sl_str = (FixedStopLoss > 0) ? " | SL: " + IntegerToString(FixedStopLoss) + " pips" : "";
         SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)" + sl_str, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 6: Avg Win | Avg Loss | RR
         SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 7: Max Win | Max Loss
         SetLabel("Line7", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 8: Win Streak
         SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 9: Loss Streak
         SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
-        
-        Comment("Win Rate: " + DoubleToString(win_rate, 1) + "%\n" +
-                "Balance: $" + DoubleToString(display_balance, 2) + "\n" +
-                "Max DD: " + DoubleToString(max_drawdown_percent, 1) + "%");
     }
-    else
-    {
-        DeleteDashboard();
-        Comment("");
-    }
+    else DeleteDashboard();
 
     return(rates_total);
 }
 
-//+------------------------------------------------------------------+
-//| Get timeframe string representation                              |
-//+------------------------------------------------------------------+
 string TimeframeToString(ENUM_TIMEFRAMES tf)
 {
     switch(tf)
@@ -542,112 +433,64 @@ string TimeframeToString(ENUM_TIMEFRAMES tf)
     return("Current");
 }
 
-//+------------------------------------------------------------------+
-//| Create or update signal arrow                                    |
-//+------------------------------------------------------------------+
 void SetArrow(string type, int idx, datetime t, double lowVal, double highVal, color col, int size, bool isBuy)
 {
     double price = isBuy ? lowVal - ArrowOffsetPips * Point : highVal + ArrowOffsetPips * Point;
-    int code = 108; // Wingdings code for bullet (circle)
+    int code = 108; 
     string name = "[MACross] " + type + " signal @ " + TimeToString(t);
-
     if(ObjectFind(name) == -1)
     {
         ObjectCreate(name, OBJ_ARROW, 0, t, price);
         ObjectSet(name, OBJPROP_ARROWCODE, code);
-        ObjectSet(name, OBJPROP_ANCHOR, isBuy ? 3 : 5); // 3=ANCHOR_TOP, 5=ANCHOR_BOTTOM
+        ObjectSet(name, OBJPROP_ANCHOR, isBuy ? 3 : 5);
     }
-
     ObjectSet(name, OBJPROP_COLOR, col);
     ObjectSet(name, OBJPROP_WIDTH, size);
     ObjectMove(name, 0, t, price);
 }
 
-//+------------------------------------------------------------------+
-//| Create or update profit text                                     |
-//+------------------------------------------------------------------+
 void SetProfitText(datetime t, double refPrice, double profit, int tradeType)
 {
-    // tradeType: 1=Buy (Closed), 2=Sell (Closed), 3=Buy SL, 4=Sell SL
     string typeStr = "BUY";
     if(tradeType == 2 || tradeType == 4) typeStr = "SELL";
-    
     string prefix = (tradeType > 2) ? "SL " : "";
     string text = prefix + typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, 0) + " pips";
     color textColor = (profit >= 0) ? clrLime : clrRed;
     int textOffset = ArrowOffsetPips + 15;
-    
-    double price = 0;
-    int anchor = 0;
-    
-    if(tradeType == 2 || tradeType == 3) // Closing Sell (At Buy Arrow) or Buy SL
-    {
-        price = refPrice - textOffset * Point;
-        anchor = 3; // ANCHOR_TOP
-    }
-    else // Closing Buy (At Sell Arrow) or Sell SL
-    {
-        price = refPrice + textOffset * Point;
-        anchor = 5; // ANCHOR_BOTTOM
-    }
-
+    double price = (tradeType == 2 || tradeType == 3) ? refPrice - textOffset * Point : refPrice + textOffset * Point;
+    int anchor = (tradeType == 2 || tradeType == 3) ? 3 : 5;
     string name = "[MACross] Profit " + TimeToString(t);
-
-    if(ObjectFind(name) == -1)
-    {
-        ObjectCreate(name, OBJ_TEXT, 0, t, price);
-    }
-
+    if(ObjectFind(name) == -1) ObjectCreate(name, OBJ_TEXT, 0, t, price);
     ObjectSetText(name, text, 8, "Arial", textColor);
     ObjectSet(name, OBJPROP_ANCHOR, anchor);
     ObjectMove(name, 0, t, price);
 }
 
-//+------------------------------------------------------------------+
-//| Create or update text label in corner                            |
-//+------------------------------------------------------------------+
 void SetLabel(string text, string val, color col, int size, int x, int y)
 {
     string name = "[MACross] Dashboard " + text;
     if(ObjectFind(name) == -1)
     {
         ObjectCreate(name, OBJ_LABEL, 0, 0, 0);
-        ObjectSet(name, OBJPROP_CORNER, 1); // 1 = CORNER_RIGHT_UPPER
-        ObjectSet(name, OBJPROP_ANCHOR, 6); // 6 = ANCHOR_RIGHT_UPPER
+        ObjectSet(name, OBJPROP_CORNER, 1); 
+        ObjectSet(name, OBJPROP_ANCHOR, 6); 
     }
-   
     ObjectSetText(name, val, size, "Arial Bold", col);
     ObjectSet(name, OBJPROP_XDISTANCE, x);
     ObjectSet(name, OBJPROP_YDISTANCE, y);
 }
 
-//+------------------------------------------------------------------+
-//| Delete dashboard labels                                          |
-//+------------------------------------------------------------------+
 void DeleteDashboard()
 {
+    for(int i=0; i<15; i++) ObjectDelete("[MACross] Dashboard Line" + IntegerToString(i));
     ObjectDelete("[MACross] Dashboard Header");
-    ObjectDelete("[MACross] Dashboard Line0");
-    ObjectDelete("[MACross] Dashboard Line1");
-    ObjectDelete("[MACross] Dashboard Line2");
-    ObjectDelete("[MACross] Dashboard Line3");
-    ObjectDelete("[MACross] Dashboard Line4");
-    ObjectDelete("[MACross] Dashboard Line5");
-    ObjectDelete("[MACross] Dashboard Line6");
-    ObjectDelete("[MACross] Dashboard Line7");
-    ObjectDelete("[MACross] Dashboard Line8");
-    ObjectDelete("[MACross] Dashboard Line9");
 }
 
-//+------------------------------------------------------------------+
-//| Delete all objects created by this indicator                     |
-//+------------------------------------------------------------------+
 void DeleteAllObjects()
 {
     for(int i = ObjectsTotal() - 1; i >= 0; i--)
     {
         string name = ObjectName(i);
-        if(StringFind(name, "[MACross]") == 0)
-            ObjectDelete(name);
+        if(StringFind(name, "[MACross]") == 0) ObjectDelete(name);
     }
 }

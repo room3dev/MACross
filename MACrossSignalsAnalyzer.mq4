@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.14"
+#property version     "1.15"
 #property strict
 #property indicator_chart_window
 
@@ -43,6 +43,10 @@ input bool        ShowHistoryProfit = true; // Show Profit on Chart
 input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
 input bool        UseHTF_Filter = false;     // Use HTF Filter
 input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
+
+input string      __money__ = "--- Risk Analyzer ---"; // [ Money ]
+input double      VirtualBalance = 1000;    // Virtual Balance ($)
+input double      VirtualLotSize = 0.01;    // Virtual Lot Size
 
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
 input bool        ShowDashboard = true;     // Show Profit Dashboard
@@ -135,6 +139,20 @@ int OnCalculate(const int rates_total,
     double cur_streak_pips = 0;
     double max_win_streak_pips = 0;
     double max_loss_streak_pips = 0;
+    
+    // Drawdown variables
+    double current_balance = VirtualBalance;
+    double peak_balance = VirtualBalance;
+    double max_drawdown_money = 0;
+    double max_drawdown_percent = 0;
+    
+    // Money Params
+    double tick_value = MarketInfo(Symbol(), MODE_TICKVALUE);
+    double tick_size = MarketInfo(Symbol(), MODE_TICKSIZE);
+    if(tick_size == 0) tick_size = Point; // Safety
+    
+    double points_per_tick = tick_size / Point;
+    double money_per_point = tick_value / points_per_tick;
 
     // We calculate from oldest to newest to track "trades"
     for(int i = rates_total - SlowPeriod - 2; i >= 0; i--)
@@ -175,22 +193,35 @@ int OnCalculate(const int rates_total,
             // ALWAYS check for Exit Signal first (Close Sell)
             if(current_trade_type == 2) 
             {
-                double trade_profit = (entry_price - close[i]) / Point;
-                closed_profit_pips += trade_profit;
+                double trade_profit_points = (entry_price - close[i]) / Point;
+                closed_profit_pips += trade_profit_points;
                 total_trades++;
                 
-                // Update Stats
-                if(trade_profit > max_win) max_win = trade_profit;
-                if(trade_profit < max_loss) max_loss = trade_profit;
+                // Money Calc
+                double trade_money = trade_profit_points * money_per_point * VirtualLotSize;
+                current_balance += trade_money;
                 
-                if(trade_profit > 0)
+                // Drawdown Update
+                if(current_balance > peak_balance) peak_balance = current_balance;
+                double drawdown = peak_balance - current_balance;
+                if(drawdown > max_drawdown_money) 
+                {
+                    max_drawdown_money = drawdown;
+                    max_drawdown_percent = (peak_balance > 0) ? (drawdown / peak_balance * 100.0) : 0;
+                }
+                
+                // Update Stats
+                if(trade_profit_points > max_win) max_win = trade_profit_points;
+                if(trade_profit_points < max_loss) max_loss = trade_profit_points;
+                
+                if(trade_profit_points > 0)
                 {
                     win_trades++;
-                    total_win_pips += trade_profit;
+                    total_win_pips += trade_profit_points;
                     cur_win_streak++;
                     if(cur_loss_streak > 0) cur_streak_pips = 0;
                     cur_loss_streak = 0;
-                    cur_streak_pips += trade_profit;
+                    cur_streak_pips += trade_profit_points;
                     
                     if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
                     if(cur_streak_pips > max_win_streak_pips) max_win_streak_pips = cur_streak_pips;
@@ -198,17 +229,17 @@ int OnCalculate(const int rates_total,
                 else
                 {
                     loss_trades++;
-                    total_loss_pips += MathAbs(trade_profit);
+                    total_loss_pips += MathAbs(trade_profit_points);
                     cur_loss_streak++;
                     if(cur_win_streak > 0) cur_streak_pips = 0;
                     cur_win_streak = 0;
-                    cur_streak_pips += trade_profit;
+                    cur_streak_pips += trade_profit_points;
                     
                     if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
                     if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
                 }
 
-                if(ShowHistoryProfit) SetProfitText(time[i], low[i], trade_profit, 2); // 2 = Sell
+                if(ShowHistoryProfit) SetProfitText(time[i], low[i], trade_profit_points, 2); // 2 = Sell
             }
             
             // Check Filter for Entry
@@ -228,22 +259,35 @@ int OnCalculate(const int rates_total,
             // ALWAYS check for Exit Signal first (Close Buy)
             if(current_trade_type == 1) 
             {
-                double trade_profit = (close[i] - entry_price) / Point;
-                closed_profit_pips += trade_profit;
+                double trade_profit_points = (close[i] - entry_price) / Point;
+                closed_profit_pips += trade_profit_points;
                 total_trades++;
                 
-                // Update Stats
-                if(trade_profit > max_win) max_win = trade_profit;
-                if(trade_profit < max_loss) max_loss = trade_profit;
+                // Money Calc
+                double trade_money = trade_profit_points * money_per_point * VirtualLotSize;
+                current_balance += trade_money;
                 
-                if(trade_profit > 0)
+                // Drawdown Update
+                if(current_balance > peak_balance) peak_balance = current_balance;
+                double drawdown = peak_balance - current_balance;
+                if(drawdown > max_drawdown_money) 
+                {
+                    max_drawdown_money = drawdown;
+                    max_drawdown_percent = (peak_balance > 0) ? (drawdown / peak_balance * 100.0) : 0;
+                }
+                
+                // Update Stats
+                if(trade_profit_points > max_win) max_win = trade_profit_points;
+                if(trade_profit_points < max_loss) max_loss = trade_profit_points;
+                
+                if(trade_profit_points > 0)
                 {
                     win_trades++;
-                    total_win_pips += trade_profit;
+                    total_win_pips += trade_profit_points;
                     cur_win_streak++;
                     if(cur_loss_streak > 0) cur_streak_pips = 0;
                     cur_loss_streak = 0;
-                    cur_streak_pips += trade_profit;
+                    cur_streak_pips += trade_profit_points;
                     
                     if(cur_win_streak > max_win_streak) max_win_streak = cur_win_streak;
                     if(cur_streak_pips > max_win_streak_pips) max_win_streak_pips = cur_streak_pips;
@@ -251,17 +295,17 @@ int OnCalculate(const int rates_total,
                 else
                 {
                     loss_trades++;
-                    total_loss_pips += MathAbs(trade_profit);
+                    total_loss_pips += MathAbs(trade_profit_points);
                     cur_loss_streak++;
                     if(cur_win_streak > 0) cur_streak_pips = 0;
                     cur_win_streak = 0;
-                    cur_streak_pips += trade_profit;
+                    cur_streak_pips += trade_profit_points;
                     
                     if(cur_loss_streak > max_loss_streak) max_loss_streak = cur_loss_streak;
                     if(cur_streak_pips < max_loss_streak_pips) max_loss_streak_pips = cur_streak_pips;
                 }
 
-                if(ShowHistoryProfit) SetProfitText(time[i], high[i], trade_profit, 1); // 1 = Buy
+                if(ShowHistoryProfit) SetProfitText(time[i], high[i], trade_profit_points, 1); // 1 = Buy
             }
             
             // Check Filter for Entry
@@ -282,6 +326,14 @@ int OnCalculate(const int rates_total,
     double open_pips = 0;
     if(current_trade_type == 1) open_pips = (Bid - entry_price) / Point;
     else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
+    
+    // Add open profit to temporary current balance for display, but don't commit it to stats yet
+    double open_money = open_pips * money_per_point * VirtualLotSize;
+    double display_balance = current_balance + open_money;
+    
+    // Update Peak/DD for live display too? Maybe usually stats are on closed, but let's just show closed stats for DD consistency.
+    // Let's keep DD stats based on closed trades to be consistent with backtests, 
+    // but display the current floating balance.
 
     // Update Dashboard or Cleanup
     if(ShowDashboard)
@@ -322,24 +374,28 @@ int OnCalculate(const int rates_total,
         SetLabel("Line3", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; // Extra gap before stats
         
-        // Line 4: Avg Win | Avg Loss | RR
-        SetLabel("Line4", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
+        // Line 4: Balance | MaxDD
+        SetLabel("Line4", "Bal: $" + DoubleToString(display_balance, 2) + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)", clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 5: Max Win | Max Loss
-        SetLabel("Line5", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
+        // Line 5: Avg Win | Avg Loss | RR
+        SetLabel("Line5", "Avg Win: " + DoubleToString(avg_win, 0) + " | Avg Loss: " + DoubleToString(avg_loss, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 6: Win Streak
-        SetLabel("Line6", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        // Line 6: Max Win | Max Loss
+        SetLabel("Line6", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        // Line 7: Loss Streak
-        SetLabel("Line7", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
+        // Line 7: Win Streak
+        SetLabel("Line7", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        current_y += LineSpacing;
+        
+        // Line 8: Loss Streak
+        SetLabel("Line8", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         
         Comment("Win Rate: " + DoubleToString(win_rate, 1) + "%\n" +
-                "Filter: " + filter_str + "\n" +
-                "Net Pips: " + DoubleToString(closed_profit_pips + open_pips, 0));
+                "Balance: $" + DoubleToString(display_balance, 2) + "\n" +
+                "Max DD: " + DoubleToString(max_drawdown_percent, 1) + "%");
     }
     else
     {
@@ -460,6 +516,7 @@ void DeleteDashboard()
     ObjectDelete("[MACross] Dashboard Line5");
     ObjectDelete("[MACross] Dashboard Line6");
     ObjectDelete("[MACross] Dashboard Line7");
+    ObjectDelete("[MACross] Dashboard Line8");
 }
 
 //+------------------------------------------------------------------+

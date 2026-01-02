@@ -16,7 +16,7 @@ Advanced Moving Average Crossover indicator for MetaTrader 4, providing real-tim
 - **Signal Analysis Limit**: Option to limit dashboard statistics to the last **X** trades (default 100) to focus on recent performance.
 - **Average Holding Time**: Displays precisely how many bars on average winning and losing trades are held.
 - **Market Bias Filter**: Restrict the indicator to showing only Buy signals, only Sell signals, or both.
-- **Adjustable Pip Definition**: Custom multiplier to standardize pips (e.g., set to **10.0** for XAUUSD to get 1 pip = 0.1 USD).
+- **Adjustable Pip Definition**: Custom multiplier to standardize pips (Defaults to **10.0** for Gold/XAUUSD so 1 pip = 0.1 USD).
 - **Trading History Statistics**: View record Winning/Losing Streaks (count and total pips) and biggest individual trade win/loss.
 - **On-Chart Performance Labels**: Historical trade profit displayed directly near signal arrows for easy verification and backtesting.
 - **Efficient Calculation**: Optimized to process only new data on each tick and simulate historical "trades".

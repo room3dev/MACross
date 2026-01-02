@@ -456,10 +456,10 @@ int OnCalculate(const int rates_total,
         SetLabel("Line7", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips)", clrRed, FontSize-1, XMargin, current_y);
+        SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
 
         string hold_str = "Avg Hold: ALL: " + DoubleToString(avg_hold_all, 0) + " | W: " + DoubleToString(avg_hold_win, 0) + " | L: " + DoubleToString(avg_hold_loss, 0) + " bars";

@@ -48,6 +48,7 @@ input color       SellColor = clrRed;        // Sell Arrow Color
 input int         ArrowSize = 2;            // Arrow Size
 input int         ArrowOffsetPips = 10;     // Arrow Offset (Pips)
 input bool        ShowActiveTradeLevels = true; // Show Entry/SL Lines
+input ENUM_LINE_STYLE ActiveTradeLineStyle = STYLE_DOT; // Active Line Style
 input bool        ShowHistoryProfit = true; // Show Profit on Chart
 
 input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
@@ -356,8 +357,8 @@ int OnCalculate(const int rates_total,
             else if(current_trade_type == 2) sl_price = entry_price + sl_pips_raw * Point;
         }
 
-        SetTradeLine("Entry", entry_price, clrLime, STYLE_DASH, 1, time[entry_idx]);
-        if(sl_price > 0) SetTradeLine("SL", sl_price, clrRed, STYLE_DASH, 1, time[entry_idx]);
+        SetTradeLine("Entry", entry_price, clrLime, ActiveTradeLineStyle, 1, time[entry_idx]);
+        if(sl_price > 0) SetTradeLine("SL", sl_price, clrRed, ActiveTradeLineStyle, 1, time[entry_idx]);
         
         // Active signal marker (Circle)
         SetEntryMarker(time[entry_idx], entry_price, current_trade_type == 1 ? BuyColor : SellColor, current_trade_type == 1);

@@ -19,9 +19,11 @@ enum ENUM_BIAS {
 };
 
 //--- Buffers (Hidden for line plotting only)
-#property indicator_buffers 2
+#property indicator_buffers 4
 #property indicator_color1 clrCyan
 #property indicator_color2 clrMagenta
+#property indicator_color3 clrSandyBrown // Up Kumo
+#property indicator_color4 clrThistle    // Down Kumo
 #property indicator_width1 1
 #property indicator_width2 1
 
@@ -52,9 +54,12 @@ input bool        UseHTF_Filter = false;     // Use HTF Filter
 input ENUM_TIMEFRAMES FilterTimeframe = PERIOD_H4; // Filter Timeframe
 input ENUM_BIAS   MarketBias = BIAS_BOTH;   // Market Bias Direction
 
-input string      __ichimoku__ = "--- Ichimoku Filter ---"; // [ Ichimoku ]
+input string      __ichimoku__ = "--- Ichimoku Filter & Visuals ---"; // [ Ichimoku ]
 input bool        UseIchimokuFilter = false;  // Use Ichimoku Filter
+input bool        PlotIchimoku_Cloud = true;  // Plot MTF Cloud on Chart
 input ENUM_TIMEFRAMES IchimokuTimeframe = PERIOD_H4; // Ichimoku Timeframe
+input color       Ichimoku_UpColor = clrSandyBrown; // Up Cloud Color
+input color       Ichimoku_DownColor = clrThistle; // Down Cloud Color
 
 input string      __adr__ = "--- ADR Filter & Visuals ---"; // [ ADR ]
 input bool        UseADR_Filter = false;    // Use ADR Filter
@@ -87,6 +92,8 @@ input int         LineSpacing = 18;         // Vertical Line Spacing
 //--- Buffers
 double FastBuffer[];
 double SlowBuffer[];
+double SpanABuffer[];
+double SpanBBuffer[];
 
 //--- Global Variables
 datetime timelastupdate = 0;
@@ -113,6 +120,14 @@ int OnInit()
     
     SetIndexLabel(0, "Fast MA(" + IntegerToString(FastPeriod) + ")");
     SetIndexLabel(1, "Slow MA(" + IntegerToString(SlowPeriod) + ")");
+
+    // Ichimoku Cloud Buffers
+    SetIndexBuffer(2, SpanABuffer);
+    SetIndexBuffer(3, SpanBBuffer);
+    SetIndexStyle(2, DRAW_HISTOGRAM, STYLE_DOT, 1, Ichimoku_UpColor);
+    SetIndexStyle(3, DRAW_HISTOGRAM, STYLE_DOT, 1, Ichimoku_DownColor);
+    SetIndexLabel(2, "MTF Span A");
+    SetIndexLabel(3, "MTF Span B");
 
     return(INIT_SUCCEEDED);
 }
@@ -149,6 +164,20 @@ int OnCalculate(const int rates_total,
     ArraySetAsSeries(high, true);
     ArraySetAsSeries(low, true);
     ArraySetAsSeries(close, true);
+
+    // Dynamic MTF Ichimoku Shift
+    if(PlotIchimoku_Cloud && Period() < IchimokuTimeframe)
+    {
+        int tf_ratio = PeriodSeconds(IchimokuTimeframe) / PeriodSeconds(Period());
+        int ichi_shift = 26 * tf_ratio;
+        SetIndexShift(2, ichi_shift);
+        SetIndexShift(3, ichi_shift);
+    }
+    else
+    {
+        SetIndexShift(2, 26); // Default
+        SetIndexShift(3, 26);
+    }
 
     // Reset indicator variables for full re-calculation
     int current_trade_type = 0; // 0=None, 1=Buy, 2=Sell
@@ -300,6 +329,19 @@ int OnCalculate(const int rates_total,
                SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
             }
             else current_trade_type = 0;
+        }
+        
+        // 4.1 MTF Ichimoku Cloud Plotting
+        if(PlotIchimoku_Cloud)
+        {
+            int ichi_bar = iBarShift(NULL, IchimokuTimeframe, time[i]);
+            SpanABuffer[i] = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANA, ichi_bar);
+            SpanBBuffer[i] = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANB, ichi_bar);
+        }
+        else
+        {
+            SpanABuffer[i] = EMPTY_VALUE;
+            SpanBBuffer[i] = EMPTY_VALUE;
         }
     }
     

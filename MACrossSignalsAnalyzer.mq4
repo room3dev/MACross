@@ -67,7 +67,7 @@ input double      VirtualBalance = 1000;    // Virtual Balance ($)
 input double      VirtualLotSize = 0.01;    // Virtual Lot Size
 input bool        UseDynamicLot  = false;   // Dynamic Lot (Compounding)
 input int         FixedStopLoss  = 0;       // Fixed Stop Loss (Pips, 0=Off)
-input double      PipSizeMultiplier = 1.0;  // Pip Size Multiplier (e.g. 10 for XAUUSD)
+input double      PipSizeMultiplier = 10.0; // Pip Size Multiplier (e.g. 10 for XAUUSD)
 input int         MaxTradesToAnalyze = 100; // Last X orders for Stats
 
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
@@ -429,7 +429,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter || UseIchimokuFilter || MarketBias != BIAS_BOTH) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
-        string line1_text = "Closed: " + DoubleToString(closed_profit_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips";
+        string line1_text = "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips";
         SetLabel("Line1", line1_text, clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
@@ -441,7 +441,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line3", line3_text, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
+        SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; 
         
         double balance_pct = (VirtualBalance > 0) ? ((display_balance - VirtualBalance) / VirtualBalance * 100.0) : 0;
@@ -450,10 +450,10 @@ int OnCalculate(const int rates_total,
         SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)" + sl_str, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " | Avg Loss: " + DoubleToString(avg_loss_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
+        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win_pips, 0) + " | Avg Loss: " + DoubleToString(avg_loss_pips, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line7", "Max Win: " + DoubleToString(max_win, (PipSizeMultiplier >= 10 ? 1 : 0)) + " | Max Loss: " + DoubleToString(max_loss, (PipSizeMultiplier >= 10 ? 1 : 0)), clrWhite, FontSize-1, XMargin, current_y);
+        SetLabel("Line7", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
         SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips)", clrLime, FontSize-1, XMargin, current_y);
@@ -508,7 +508,7 @@ void SetProfitText(datetime t, double refPrice, double profit, int tradeType)
     string typeStr = "BUY";
     if(tradeType == 2 || tradeType == 4) typeStr = "SELL";
     string prefix = (tradeType > 2) ? "SL " : "";
-    string text = prefix + typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips";
+    string text = prefix + typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, 0) + " pips";
     color textColor = (profit >= 0) ? clrLime : clrRed;
     int textOffset = ArrowOffsetPips + 15;
     double price = (tradeType == 2 || tradeType == 3) ? refPrice - textOffset * Point : refPrice + textOffset * Point;

@@ -47,6 +47,7 @@ input color       BuyColor = clrLime;       // Buy Arrow Color
 input color       SellColor = clrRed;        // Sell Arrow Color
 input int         ArrowSize = 2;            // Arrow Size
 input int         ArrowOffsetPips = 10;     // Arrow Offset (Pips)
+input bool        ShowActiveTradeLevels = true; // Show Entry/SL Lines
 input bool        ShowHistoryProfit = true; // Show Profit on Chart
 
 input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
@@ -164,6 +165,10 @@ int OnCalculate(const int rates_total,
     ArraySetAsSeries(high, true);
     ArraySetAsSeries(low, true);
     ArraySetAsSeries(close, true);
+
+    // Initialize/Clear MTF buffers
+    ArrayInitialize(SpanABuffer, EMPTY_VALUE);
+    ArrayInitialize(SpanBBuffer, EMPTY_VALUE);
 
     // Dynamic MTF Ichimoku Shift
     if(PlotIchimoku_Cloud && Period() < IchimokuTimeframe)
@@ -330,7 +335,7 @@ int OnCalculate(const int rates_total,
             }
             else current_trade_type = 0;
         }
-        
+
         // 4.1 MTF Ichimoku Cloud Plotting
         if(PlotIchimoku_Cloud)
         {
@@ -338,12 +343,26 @@ int OnCalculate(const int rates_total,
             SpanABuffer[i] = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANA, ichi_bar);
             SpanBBuffer[i] = iIchimoku(NULL, IchimokuTimeframe, 9, 26, 52, MODE_SENKOUSPANB, ichi_bar);
         }
-        else
-        {
-            SpanABuffer[i] = EMPTY_VALUE;
-            SpanBBuffer[i] = EMPTY_VALUE;
-        }
     }
+    
+    // --- ACTIVE TRADE VISUALS ---
+    if(ShowActiveTradeLevels && current_trade_type != 0)
+    {
+        double sl_price = 0;
+        if(FixedStopLoss > 0)
+        {
+            double sl_pips_raw = FixedStopLoss * PipSizeMultiplier;
+            if(current_trade_type == 1) sl_price = entry_price - sl_pips_raw * Point;
+            else if(current_trade_type == 2) sl_price = entry_price + sl_pips_raw * Point;
+        }
+
+        SetTradeLine("Entry", entry_price, clrLime, STYLE_DASH, 1, time[entry_idx]);
+        if(sl_price > 0) SetTradeLine("SL", sl_price, clrRed, STYLE_DASH, 1, time[entry_idx]);
+        
+        // Active signal marker (Circle)
+        SetEntryMarker(time[entry_idx], entry_price, current_trade_type == 1 ? BuyColor : SellColor, current_trade_type == 1);
+    }
+    else DeleteActiveTradeVisuals();
     
     // --- ADR VISUALS INTEGRATION ---
     if(PlotADR_Levels && Period() <= PERIOD_D1)
@@ -637,6 +656,33 @@ void SetADRLevel(string text, double level, color col, int linestyle, int thickn
     ObjectMove(name, 1, Time[0], level);
 }
 
+void SetTradeLine(string text, double level, color col, int linestyle, int thickness, datetime starttime)
+{
+    string name = "[MACross] Active " + text + " Line";
+    if(ObjectFind(name) == -1)
+        ObjectCreate(name, OBJ_TREND, 0, starttime, level, Time[0], level);
+    ObjectSet(name, OBJPROP_BACK, true);
+    ObjectSet(name, OBJPROP_STYLE, linestyle);
+    ObjectSet(name, OBJPROP_COLOR, col);
+    ObjectSet(name, OBJPROP_WIDTH, thickness);
+    ObjectMove(name, 0, starttime, level);
+    ObjectMove(name, 1, Time[0], level);
+}
+
+void SetEntryMarker(datetime t, double price, color col, bool isBuy)
+{
+    string name = "[MACross] Active Entry Marker";
+    if(ObjectFind(name) == -1)
+    {
+        ObjectCreate(name, OBJ_ARROW, 0, t, price);
+        ObjectSet(name, OBJPROP_ARROWCODE, 159); // Large Dot/Circle
+        ObjectSet(name, OBJPROP_ANCHOR, 4); // Anchor Center
+    }
+    ObjectSet(name, OBJPROP_COLOR, col);
+    ObjectSet(name, OBJPROP_WIDTH, 2);
+    ObjectMove(name, 0, t, price);
+}
+
 void ComputeDayIndices(int tzlocal, int tzdest, int &idxToday, int &idxYesterdayStart, int &idxYesterdayEnd)
 {
     int tzdiffsec = (tzlocal + tzdest) * 3600;
@@ -669,6 +715,13 @@ void DeleteADRVisuals()
         string name = ObjectName(i);
         if(StringFind(name, "[MR_ADR]") == 0) ObjectDelete(name);
     }
+}
+
+void DeleteActiveTradeVisuals()
+{
+    ObjectDelete("[MACross] Active Entry Line");
+    ObjectDelete("[MACross] Active SL Line");
+    ObjectDelete("[MACross] Active Entry Marker");
 }
 
 void DeleteDashboard()

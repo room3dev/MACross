@@ -198,6 +198,18 @@ int OnCalculate(const int rates_total,
     ArrayResize(trade_history_pips, 0);
     ArrayResize(trade_history_bars, 0);
     ArrayResize(trade_history_type, 0);
+
+    // Visual Buffering (Arrows & Profit Labels)
+    datetime signal_v_time[];
+    double   signal_v_price[];
+    int      signal_v_type[];   // 1=Buy Signal, 2=Sell Signal
+    double   signal_v_profit[];
+    bool     signal_v_has_p[];
+    ArrayResize(signal_v_time, 0);
+    ArrayResize(signal_v_price, 0);
+    ArrayResize(signal_v_type, 0);
+    ArrayResize(signal_v_profit, 0);
+    ArrayResize(signal_v_has_p, 0);
     
     // Money Params
     double tick_value = MarketInfo(Symbol(), MODE_TICKVALUE);
@@ -242,7 +254,13 @@ int OnCalculate(const int rates_total,
                 trade_history_bars[sz] = entry_idx - i;
                 trade_history_type[sz] = current_trade_type;
 
-                if(ShowHistoryProfit) SetProfitText(time[i], close[i], floating_pips_adj, (current_trade_type == 1 ? 3 : 4));
+                // Buffer Close Visual
+                int vsz = ArraySize(signal_v_time);
+                ArrayResize(signal_v_time, vsz+1); ArrayResize(signal_v_price, vsz+1); ArrayResize(signal_v_type, vsz+1);
+                ArrayResize(signal_v_profit, vsz+1); ArrayResize(signal_v_has_p, vsz+1);
+                signal_v_time[vsz] = time[i]; signal_v_price[vsz] = close[i]; signal_v_type[vsz] = (current_trade_type == 1 ? 3 : 4);
+                signal_v_profit[vsz] = floating_pips_adj; signal_v_has_p[vsz] = true;
+
                 current_trade_type = 0;
             }
         }
@@ -302,14 +320,26 @@ int OnCalculate(const int rates_total,
                 trade_history_pips[sz] = pips;
                 trade_history_bars[sz] = entry_idx - i;
                 trade_history_type[sz] = 2; // Was Sell
-                if(ShowHistoryProfit) SetProfitText(time[i], low[i], pips, 2);
+                
+                // Buffer Close Visual
+                int vsz = ArraySize(signal_v_time);
+                ArrayResize(signal_v_time, vsz+1); ArrayResize(signal_v_price, vsz+1); ArrayResize(signal_v_type, vsz+1);
+                ArrayResize(signal_v_profit, vsz+1); ArrayResize(signal_v_has_p, vsz+1);
+                signal_v_time[vsz] = time[i]; signal_v_price[vsz] = low[i]; signal_v_type[vsz] = 2;
+                signal_v_profit[vsz] = pips; signal_v_has_p[vsz] = true;
             }
             if(buy_allowed)
             {
                entry_price = close[i];
                entry_idx = i;
                current_trade_type = 1; 
-               SetArrow("Buy", i, time[i], low[i], high[i], BuyColor, ArrowSize, true);
+
+               // Buffer Open Visual
+               int vsz = ArraySize(signal_v_time);
+               ArrayResize(signal_v_time, vsz+1); ArrayResize(signal_v_price, vsz+1); ArrayResize(signal_v_type, vsz+1);
+               ArrayResize(signal_v_profit, vsz+1); ArrayResize(signal_v_has_p, vsz+1);
+               signal_v_time[vsz] = time[i]; signal_v_price[vsz] = low[i]; signal_v_type[vsz] = 11; // 11=Buy Arrow
+               signal_v_profit[vsz] = 0; signal_v_has_p[vsz] = false;
             }
             else current_trade_type = 0;
         }
@@ -325,14 +355,26 @@ int OnCalculate(const int rates_total,
                 trade_history_pips[sz] = pips;
                 trade_history_bars[sz] = entry_idx - i;
                 trade_history_type[sz] = 1; // Was Buy
-                if(ShowHistoryProfit) SetProfitText(time[i], high[i], pips, 1);
+
+                // Buffer Close Visual
+                int vsz = ArraySize(signal_v_time);
+                ArrayResize(signal_v_time, vsz+1); ArrayResize(signal_v_price, vsz+1); ArrayResize(signal_v_type, vsz+1);
+                ArrayResize(signal_v_profit, vsz+1); ArrayResize(signal_v_has_p, vsz+1);
+                signal_v_time[vsz] = time[i]; signal_v_price[vsz] = high[i]; signal_v_type[vsz] = 1;
+                signal_v_profit[vsz] = pips; signal_v_has_p[vsz] = true;
             }
             if(sell_allowed)
             {
                entry_price = close[i];
                entry_idx = i;
                current_trade_type = 2; 
-               SetArrow("Sell", i, time[i], low[i], high[i], SellColor, ArrowSize, false);
+
+               // Buffer Open Visual
+               int vsz = ArraySize(signal_v_time);
+               ArrayResize(signal_v_time, vsz+1); ArrayResize(signal_v_price, vsz+1); ArrayResize(signal_v_type, vsz+1);
+               ArrayResize(signal_v_profit, vsz+1); ArrayResize(signal_v_has_p, vsz+1);
+               signal_v_time[vsz] = time[i]; signal_v_price[vsz] = high[i]; signal_v_type[vsz] = 22; // 22=Sell Arrow
+               signal_v_profit[vsz] = 0; signal_v_has_p[vsz] = false;
             }
             else current_trade_type = 0;
         }
@@ -346,6 +388,19 @@ int OnCalculate(const int rates_total,
         }
     }
     
+    // 4.2 Plot Visuals (Arrows & Labels) - Windowed Subset
+    DeleteSignals();
+    int total_v = ArraySize(signal_v_time);
+    int head_v = 0;
+    if(MaxTradesToAnalyze > 0) head_v = MathMax(0, total_v - MaxTradesToAnalyze * 2); // Roughly 2 visuals per trade
+
+    for(int k = head_v; k < total_v; k++)
+    {
+        if(signal_v_type[k] == 11) SetArrow("Buy", k, signal_v_time[k], signal_v_price[k], signal_v_price[k], BuyColor, ArrowSize, true);
+        else if(signal_v_type[k] == 22) SetArrow("Sell", k, signal_v_time[k], signal_v_price[k], signal_v_price[k], SellColor, ArrowSize, false);
+        else if(signal_v_has_p[k] && ShowHistoryProfit) SetProfitText(signal_v_time[k], signal_v_price[k], signal_v_profit[k], signal_v_type[k]);
+    }
+
     // --- ACTIVE TRADE VISUALS ---
     if(ShowActiveTradeLevels && current_trade_type != 0)
     {
@@ -711,6 +766,18 @@ void DeleteDashboard()
 {
     for(int i=0; i<15; i++) ObjectDelete("[MACross] Dashboard Line" + IntegerToString(i));
     ObjectDelete("[MACross] Dashboard Header");
+}
+
+void DeleteSignals()
+{
+    for(int i = ObjectsTotal() - 1; i >= 0; i--)
+    {
+        string name = ObjectName(i);
+        if(StringFind(name, "[MACross] Buy signal") == 0 || 
+           StringFind(name, "[MACross] Sell signal") == 0 ||
+           StringFind(name, "[MACross] Profit") == 0) 
+            ObjectDelete(name);
+    }
 }
 
 void DeleteAllObjects()

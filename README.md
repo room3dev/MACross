@@ -13,7 +13,7 @@ Advanced Moving Average Crossover indicator for MetaTrader 4, providing real-tim
 - **HTF Filtering**: Option to filter current timeframe signals by the trend of a Higher Timeframe (e.g., only buy on M15 if H4 trend is up).
 - **ADR Filter**: Option to filter trades based on remaining Average Daily Range (Upsize/Downsize %) to avoid buying at the top or selling at the bottom.
 - **Ichimoku Kumo Filter**: Validates signals based on the Ichimoku cloud position (Buy above Cloud, Sell below Cloud) with multi-timeframe support.
-- **Signal Analysis Limit**: Option to limit dashboard statistics to the last **X** trades (default 100) to focus on recent performance.
+- **Signal Analysis Limit**: Option to limit dashboard statistics and **on-chart signals** to the last **X** trades (default 100) to focus on recent performance and keep the chart clean.
 - **Average Holding Time**: Displays precisely how many bars on average winning and losing trades are held.
 - **Market Bias Filter**: Restrict the indicator to showing only Buy signals, only Sell signals, or both.
 - **ADR Filter & Visuals**: Validates signals based on the daily range and plots **Daily Open**, **ADR High/Low**, and **ADR Mid** lines directly on your chart.

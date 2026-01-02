@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.20"
+#property version     "1.21"
 #property strict
 #property indicator_chart_window
 
@@ -67,6 +67,7 @@ input double      VirtualBalance = 1000;    // Virtual Balance ($)
 input double      VirtualLotSize = 0.01;    // Virtual Lot Size
 input bool        UseDynamicLot  = false;   // Dynamic Lot (Compounding)
 input int         FixedStopLoss  = 0;       // Fixed Stop Loss (Pips, 0=Off)
+input double      PipSizeMultiplier = 1.0;  // Pip Size Multiplier (e.g. 10 for XAUUSD)
 input int         MaxTradesToAnalyze = 100; // Last X orders for Stats
 
 input string      __ui__ = "--- Dashboard Settings ---"; // [ Dashboard ]
@@ -183,21 +184,24 @@ int OnCalculate(const int rates_total,
         // 2.1 Stop Loss Check (At Bar Close)
         if(FixedStopLoss > 0 && current_trade_type != 0)
         {
-            double floating_pips = 0;
-            if(current_trade_type == 1) floating_pips = (close[i] - entry_price) / Point;
-            else if(current_trade_type == 2) floating_pips = (entry_price - close[i]) / Point;
+            double floating_pips_raw = 0;
+            if(current_trade_type == 1) floating_pips_raw = (close[i] - entry_price) / Point;
+            else if(current_trade_type == 2) floating_pips_raw = (entry_price - close[i]) / Point;
             
-            if(floating_pips <= -FixedStopLoss)
+            // Adjust floating pips for SL check if multiplier > 1
+            double floating_pips_adj = floating_pips_raw / PipSizeMultiplier;
+            
+            if(floating_pips_adj <= -FixedStopLoss)
             {
                 int sz = ArraySize(trade_history_pips);
                 ArrayResize(trade_history_pips, sz + 1);
                 ArrayResize(trade_history_bars, sz + 1);
                 ArrayResize(trade_history_type, sz + 1);
-                trade_history_pips[sz] = floating_pips;
+                trade_history_pips[sz] = floating_pips_adj;
                 trade_history_bars[sz] = entry_idx - i;
                 trade_history_type[sz] = current_trade_type;
 
-                if(ShowHistoryProfit) SetProfitText(time[i], close[i], floating_pips, (current_trade_type == 1 ? 3 : 4));
+                if(ShowHistoryProfit) SetProfitText(time[i], close[i], floating_pips_adj, (current_trade_type == 1 ? 3 : 4));
                 current_trade_type = 0;
             }
         }
@@ -249,7 +253,7 @@ int OnCalculate(const int rates_total,
         {
             if(current_trade_type == 2) 
             {
-                double pips = (entry_price - close[i]) / Point;
+                double pips = ((entry_price - close[i]) / Point) / PipSizeMultiplier;
                 int sz = ArraySize(trade_history_pips);
                 ArrayResize(trade_history_pips, sz + 1);
                 ArrayResize(trade_history_bars, sz + 1);
@@ -272,7 +276,7 @@ int OnCalculate(const int rates_total,
         {
             if(current_trade_type == 1) 
             {
-                double pips = (close[i] - entry_price) / Point;
+                double pips = ((close[i] - entry_price) / Point) / PipSizeMultiplier;
                 int sz = ArraySize(trade_history_pips);
                 ArrayResize(trade_history_pips, sz + 1);
                 ArrayResize(trade_history_bars, sz + 1);
@@ -335,11 +339,12 @@ int OnCalculate(const int rates_total,
         if(type == 1) buys_in_window++;
         else if(type == 2) sells_in_window++;
         
-        // Money Analysis
+        // Money Analysis (Always raw for balance)
         double current_lot = VirtualLotSize;
         if(UseDynamicLot) current_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
         
-        double trade_money = pips * money_per_point * current_lot;
+        // raw_pips = pips * multiplier
+        double trade_money = (pips * PipSizeMultiplier) * money_per_point * current_lot;
         current_balance += trade_money;
         if(current_balance > peak_balance) peak_balance = current_balance;
         double dd = peak_balance - current_balance;
@@ -381,13 +386,14 @@ int OnCalculate(const int rates_total,
 
     // 6. Current Open Trade
     double open_pips = 0;
-    if(current_trade_type == 1) open_pips = (Bid - entry_price) / Point;
-    else if(current_trade_type == 2) open_pips = (entry_price - Bid) / Point;
+    if(current_trade_type == 1) open_pips = ((Bid - entry_price) / Point) / PipSizeMultiplier;
+    else if(current_trade_type == 2) open_pips = ((entry_price - Bid) / Point) / PipSizeMultiplier;
     
     double entry_lot_final = VirtualLotSize;
     if(UseDynamicLot) entry_lot_final = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
     
-    double open_money = open_pips * money_per_point * entry_lot_final;
+    double open_pips_raw = open_pips * PipSizeMultiplier;
+    double open_money = open_pips_raw * money_per_point * entry_lot_final;
     double display_balance = current_balance + open_money;
 
     // 7. Dashboard
@@ -423,7 +429,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line0", "Filter: " + filter_str, ((UseHTF_Filter || UseADR_Filter || UseIchimokuFilter || MarketBias != BIAS_BOTH) ? clrLime : clrGray), FontSize - 1, XMargin, current_y);
         current_y += LineSpacing;
 
-        string line1_text = "Closed: " + DoubleToString(closed_profit_pips, 0) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, 0) + " pips";
+        string line1_text = "Closed: " + DoubleToString(closed_profit_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips | Current(" + trade_type_str + "): " + DoubleToString(open_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips";
         SetLabel("Line1", line1_text, clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
@@ -435,7 +441,7 @@ int OnCalculate(const int rates_total,
         SetLabel("Line3", line3_text, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, 0) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
+        SetLabel("Line4", "Total Net: " + DoubleToString(closed_profit_pips + open_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips | WR: " + DoubleToString(win_rate, 1) + "%", clrWhite, FontSize, XMargin, current_y);
         current_y += LineSpacing + header_gap; 
         
         double balance_pct = (VirtualBalance > 0) ? ((display_balance - VirtualBalance) / VirtualBalance * 100.0) : 0;
@@ -444,16 +450,16 @@ int OnCalculate(const int rates_total,
         SetLabel("Line5", bal_str + " | MaxDD: $" + DoubleToString(max_drawdown_money, 2) + " (" + DoubleToString(max_drawdown_percent, 1) + "%)" + sl_str, clrAqua, FontSize, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win_pips, 0) + " | Avg Loss: " + DoubleToString(avg_loss_pips, 0) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
+        SetLabel("Line6", "Avg Win: " + DoubleToString(avg_win_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " | Avg Loss: " + DoubleToString(avg_loss_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " | RR: " + DoubleToString(rr_ratio, 2), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line7", "Max Win: " + DoubleToString(max_win, 0) + " | Max Loss: " + DoubleToString(max_loss, 0), clrWhite, FontSize-1, XMargin, current_y);
+        SetLabel("Line7", "Max Win: " + DoubleToString(max_win, (PipSizeMultiplier >= 10 ? 1 : 0)) + " | Max Loss: " + DoubleToString(max_loss, (PipSizeMultiplier >= 10 ? 1 : 0)), clrWhite, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, 0) + " pips)", clrLime, FontSize-1, XMargin, current_y);
+        SetLabel("Line8", "Winning Streak: " + IntegerToString(max_win_streak) + " (" + DoubleToString(max_win_streak_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips)", clrLime, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
         
-        SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, 0) + " pips)", clrRed, FontSize-1, XMargin, current_y);
+        SetLabel("Line9", "Losing Streak: " + IntegerToString(max_loss_streak) + " (" + DoubleToString(max_loss_streak_pips, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips)", clrRed, FontSize-1, XMargin, current_y);
         current_y += LineSpacing;
 
         string hold_str = "Avg Hold: ALL: " + DoubleToString(avg_hold_all, 0) + " | W: " + DoubleToString(avg_hold_win, 0) + " | L: " + DoubleToString(avg_hold_loss, 0) + " bars";
@@ -502,7 +508,7 @@ void SetProfitText(datetime t, double refPrice, double profit, int tradeType)
     string typeStr = "BUY";
     if(tradeType == 2 || tradeType == 4) typeStr = "SELL";
     string prefix = (tradeType > 2) ? "SL " : "";
-    string text = prefix + typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, 0) + " pips";
+    string text = prefix + typeStr + " " + (profit >= 0 ? "+" : "") + DoubleToString(profit, (PipSizeMultiplier >= 10 ? 1 : 0)) + " pips";
     color textColor = (profit >= 0) ? clrLime : clrRed;
     int textOffset = ArrowOffsetPips + 15;
     double price = (tradeType == 2 || tradeType == 3) ? refPrice - textOffset * Point : refPrice + textOffset * Point;

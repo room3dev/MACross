@@ -7,7 +7,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MarketRange"
 #property link        "https://github.com/room3dev/MACrossSignalsAnalyzer"
-#property version     "1.21"
+#property version     "1.22"
 #property strict
 #property indicator_chart_window
 
@@ -56,11 +56,18 @@ input string      __ichimoku__ = "--- Ichimoku Filter ---"; // [ Ichimoku ]
 input bool        UseIchimokuFilter = false;  // Use Ichimoku Filter
 input ENUM_TIMEFRAMES IchimokuTimeframe = PERIOD_H4; // Ichimoku Timeframe
 
-input string      __adr__ = "--- ADR Filter ---"; // [ ADR Filter ]
+input string      __adr__ = "--- ADR Filter & Visuals ---"; // [ ADR ]
 input bool        UseADR_Filter = false;    // Use ADR Filter
+input bool        PlotADR_Levels = true;    // Plot ADR Lines on Chart
 input double      MinADR_Upsize = 20.0;     // Min Upsize % for Buy
 input double      MinADR_Downsize = 20.0;   // Min Downsize % for Sell
-input int         ATRPeriod = 15;           // ATR Period for ADR
+input int         ADR_ATRPeriod = 15;       // ATR Period for ADR
+input int         TimeZoneOfData = 0;       // Chart time zone (GMT)
+input int         TimeZoneOfSession = 0;    // Dest time zone (GMT)
+input color       ADR_Color1 = clrRed;      // Normal ADR Color
+input color       ADR_Color2 = clrBlue;     // Reached ADR Color
+input color       ADR_ColorOpen = clrGray;  // Daily Open Color
+input color       ADR_ColorMid = clrSilver; // ADR Mid Color
 
 input string      __money__ = "--- Risk Analyzer ---"; // [ Money ]
 input double      VirtualBalance = 1000;    // Virtual Balance ($)
@@ -188,7 +195,6 @@ int OnCalculate(const int rates_total,
             if(current_trade_type == 1) floating_pips_raw = (close[i] - entry_price) / Point;
             else if(current_trade_type == 2) floating_pips_raw = (entry_price - close[i]) / Point;
             
-            // Adjust floating pips for SL check if multiplier > 1
             double floating_pips_adj = floating_pips_raw / PipSizeMultiplier;
             
             if(floating_pips_adj <= -FixedStopLoss)
@@ -225,7 +231,7 @@ int OnCalculate(const int rates_total,
             {
                  int day_shift = iBarShift(NULL, PERIOD_D1, time[i]);
                  double daily_open = iOpen(NULL, PERIOD_D1, day_shift);
-                 double adr_val = iATR(NULL, PERIOD_D1, ATRPeriod, day_shift + 1);
+                 double adr_val = iATR(NULL, PERIOD_D1, ADR_ATRPeriod, day_shift + 1);
                  double adr_high = daily_open + adr_val;
                  double adr_low = daily_open - adr_val;
                  double range = adr_high - adr_low;
@@ -296,6 +302,51 @@ int OnCalculate(const int rates_total,
             else current_trade_type = 0;
         }
     }
+    
+    // --- ADR VISUALS INTEGRATION ---
+    if(PlotADR_Levels && Period() <= PERIOD_D1)
+    {
+        int idxToday = 0, idxYestStart = 0, idxYestEnd = 0;
+        ComputeDayIndices(TimeZoneOfData, TimeZoneOfSession, idxToday, idxYestStart, idxYestEnd);
+        
+        datetime startofday = time[idxToday];
+        double adr = iATR(NULL, PERIOD_D1, ADR_ATRPeriod, 1);
+        
+        double t_high = 0, t_low = 0, t_open = 0;
+        double a_high = 0, a_low = 0;
+        bool a_reached = false;
+        
+        int tzsec = (TimeZoneOfData + TimeZoneOfSession) * 3600;
+
+        for(int j = idxToday; j >= 0; j--)
+        {
+            if(t_open == 0)
+            {
+                t_open = open[idxToday];
+                a_high = t_open + adr;
+                a_low = t_open - adr;
+                t_high = t_open; t_low = t_open;
+            }
+            t_high = MathMax(t_high, high[j]);
+            t_low = MathMin(t_low, low[j]);
+            if(t_high - t_low >= adr - Point/2.0) a_reached = true;
+            
+            if(!a_reached)
+            {
+                a_high = t_low + adr;
+                a_low = t_high - adr;
+            }
+        }
+        
+        color adr_col = a_reached ? ADR_Color2 : ADR_Color1;
+        int adr_thick = a_reached ? 2 : 1;
+        
+        SetADRLevel("ADR High", a_high, adr_col, STYLE_DOT, adr_thick, startofday);
+        SetADRLevel("ADR Low", a_low, adr_col, STYLE_DOT, adr_thick, startofday);
+        SetADRLevel("ADR Mid", (a_high + a_low)/2.0, ADR_ColorMid, STYLE_DOT, 1, startofday);
+        SetADRLevel("Daily Open", t_open, ADR_ColorOpen, STYLE_SOLID, 1, startofday);
+    }
+    else DeleteADRVisuals();
 
     // 5. Statistics Calculation (Last X Only)
     double closed_profit_pips = 0;
@@ -339,11 +390,9 @@ int OnCalculate(const int rates_total,
         if(type == 1) buys_in_window++;
         else if(type == 2) sells_in_window++;
         
-        // Money Analysis (Always raw for balance)
         double current_lot = VirtualLotSize;
         if(UseDynamicLot) current_lot = MathMax(0.01, NormalizeDouble((current_balance / VirtualBalance) * VirtualLotSize, 2));
         
-        // raw_pips = pips * multiplier
         double trade_money = (pips * PipSizeMultiplier) * money_per_point * current_lot;
         current_balance += trade_money;
         if(current_balance > peak_balance) peak_balance = current_balance;
@@ -354,7 +403,6 @@ int OnCalculate(const int rates_total,
             max_drawdown_percent = (peak_balance > 0) ? (dd / peak_balance * 100.0) : 0;
         }
 
-        // Stats
         if(pips > max_win) max_win = pips;
         if(pips < max_loss) max_loss = pips;
 
@@ -534,6 +582,53 @@ void SetLabel(string text, string val, color col, int size, int x, int y)
     ObjectSet(name, OBJPROP_YDISTANCE, y);
 }
 
+void SetADRLevel(string text, double level, color col, int linestyle, int thickness, datetime starttime)
+{
+    string name = "[MR_ADR] " + text + " Line";
+    if(ObjectFind(name) == -1)
+        ObjectCreate(name, OBJ_TREND, 0, starttime, level, Time[0], level);
+    ObjectSet(name, OBJPROP_BACK, true);
+    ObjectSet(name, OBJPROP_STYLE, linestyle);
+    ObjectSet(name, OBJPROP_COLOR, col);
+    ObjectSet(name, OBJPROP_WIDTH, thickness);
+    ObjectMove(name, 0, starttime, level);
+    ObjectMove(name, 1, Time[0], level);
+}
+
+void ComputeDayIndices(int tzlocal, int tzdest, int &idxToday, int &idxYesterdayStart, int &idxYesterdayEnd)
+{
+    int tzdiffsec = (tzlocal + tzdest) * 3600;
+    int dayToday = TimeDayOfWeek(Time[0] - tzdiffsec);
+    int dayYesterday = (dayToday == 0) ? 5 : (dayToday == 1 ? 5 : dayToday - 1);
+
+    idxToday = 0;
+    for(int i = 0; i <= 1440 + 1; i++) // Max bars in a day (M1)
+    {
+        if(TimeDayOfWeek(Time[i] - tzdiffsec) != dayToday) { idxToday = i - 1; break; }
+    }
+
+    idxYesterdayEnd = 0;
+    for(int j = idxToday + 1; j <= 2880 + 1; j++)
+    {
+        if(TimeDayOfWeek(Time[j] - tzdiffsec) == dayYesterday) { idxYesterdayEnd = j; break; }
+    }
+
+    idxYesterdayStart = idxYesterdayEnd;
+    for(int k = 1; k <= 1440; k++)
+    {
+        if(TimeDayOfWeek(Time[idxYesterdayEnd + k] - tzdiffsec) != dayYesterday) { idxYesterdayStart = idxYesterdayEnd + k - 1; break; }
+    }
+}
+
+void DeleteADRVisuals()
+{
+    for(int i = ObjectsTotal() - 1; i >= 0; i--)
+    {
+        string name = ObjectName(i);
+        if(StringFind(name, "[MR_ADR]") == 0) ObjectDelete(name);
+    }
+}
+
 void DeleteDashboard()
 {
     for(int i=0; i<15; i++) ObjectDelete("[MACross] Dashboard Line" + IntegerToString(i));
@@ -545,6 +640,6 @@ void DeleteAllObjects()
     for(int i = ObjectsTotal() - 1; i >= 0; i--)
     {
         string name = ObjectName(i);
-        if(StringFind(name, "[MACross]") == 0) ObjectDelete(name);
+        if(StringFind(name, "[MACross]") == 0 || StringFind(name, "[MR_ADR]") == 0) ObjectDelete(name);
     }
 }

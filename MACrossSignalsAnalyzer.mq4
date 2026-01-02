@@ -58,8 +58,8 @@ input string      __ichimoku__ = "--- Ichimoku Filter & Visuals ---"; // [ Ichim
 input bool        UseIchimokuFilter = false;  // Use Ichimoku Filter
 input bool        PlotIchimoku_Cloud = true;  // Plot MTF Cloud on Chart
 input ENUM_TIMEFRAMES IchimokuTimeframe = PERIOD_H4; // Ichimoku Timeframe
-input color       Ichimoku_UpColor = clrSandyBrown; // Up Cloud Color
-input color       Ichimoku_DownColor = clrThistle; // Down Cloud Color
+input color       Ichimoku_UpColor = clrDarkGreen; // Up Cloud Color
+input color       Ichimoku_DownColor = clrFireBrick; // Down Cloud Color
 
 input string      __adr__ = "--- ADR Filter & Visuals ---"; // [ ADR ]
 input bool        UseADR_Filter = false;    // Use ADR Filter

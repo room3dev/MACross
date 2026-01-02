@@ -48,7 +48,7 @@ input color       SellColor = clrRed;        // Sell Arrow Color
 input int         ArrowSize = 2;            // Arrow Size
 input int         ArrowOffsetPips = 10;     // Arrow Offset (Pips)
 input bool        ShowActiveTradeLevels = true; // Show Entry/SL Lines
-input ENUM_LINE_STYLE ActiveTradeLineStyle = STYLE_DOT; // Active Line Style
+input ENUM_LINE_STYLE ActiveTradeLineStyle = STYLE_DASHDOT; // Active Line Style
 input bool        ShowHistoryProfit = true; // Show Profit on Chart
 
 input string      __filter__ = "--- Signal Filter ---"; // [ Filter ]
@@ -359,9 +359,6 @@ int OnCalculate(const int rates_total,
 
         SetTradeLine("Entry", entry_price, clrLime, ActiveTradeLineStyle, 1, time[entry_idx]);
         if(sl_price > 0) SetTradeLine("SL", sl_price, clrRed, ActiveTradeLineStyle, 1, time[entry_idx]);
-        
-        // Active signal marker (Circle)
-        SetEntryMarker(time[entry_idx], entry_price, current_trade_type == 1 ? BuyColor : SellColor, current_trade_type == 1);
     }
     else DeleteActiveTradeVisuals();
     
@@ -670,20 +667,6 @@ void SetTradeLine(string text, double level, color col, int linestyle, int thick
     ObjectMove(name, 1, Time[0], level);
 }
 
-void SetEntryMarker(datetime t, double price, color col, bool isBuy)
-{
-    string name = "[MACross] Active Entry Marker";
-    if(ObjectFind(name) == -1)
-    {
-        ObjectCreate(name, OBJ_ARROW, 0, t, price);
-        ObjectSet(name, OBJPROP_ARROWCODE, 159); // Large Dot/Circle
-        ObjectSet(name, OBJPROP_ANCHOR, 4); // Anchor Center
-    }
-    ObjectSet(name, OBJPROP_COLOR, col);
-    ObjectSet(name, OBJPROP_WIDTH, 2);
-    ObjectMove(name, 0, t, price);
-}
-
 void ComputeDayIndices(int tzlocal, int tzdest, int &idxToday, int &idxYesterdayStart, int &idxYesterdayEnd)
 {
     int tzdiffsec = (tzlocal + tzdest) * 3600;
@@ -722,7 +705,6 @@ void DeleteActiveTradeVisuals()
 {
     ObjectDelete("[MACross] Active Entry Line");
     ObjectDelete("[MACross] Active SL Line");
-    ObjectDelete("[MACross] Active Entry Marker");
 }
 
 void DeleteDashboard()

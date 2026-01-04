@@ -65,22 +65,19 @@ input color       Ichimoku_DownColor = clrFireBrick; // Down Cloud Color
 
 input string      __adr__ = "--- ADR Filter & Visuals ---"; // [ ADR ]
 input bool        UseADR_Filter = false;    // Use ADR Filter
-input bool        PlotADR_Levels = true;    // Plot ADR Levels
-input bool        PlotPrevDailyHL = true;   // Plot Prev Daily High/Low
+input bool        PlotADR_Levels = true;    // Plot ADR Lines on Chart
 input double      MinADR_Upsize = 20.0;     // Min Upsize % for Buy
 input double      MinADR_Downsize = 20.0;   // Min Downsize % for Sell
-input int         ADR_ATRPeriod = 120;       // ADR Period (Days)
-input int         TimeZoneOfData = 2;       // TimeZone of Data (GMT+2)
-input int         TimeZoneOfSession = 0;    // TimeZone of Session (GMT+0)
-input color       ADR_HighLowColor = clrRed; // ADR High/Low Line Color
-input color       ADR_MidColor = clrYellow;  // ADR Mid Line Color
-input color       ADR_OpenColor = clrAqua;  // Daily Open Line Color
-input color       PrevDailyHighColor = clrGreen; // Prev Daily High Color
-input color       PrevDailyLowColor = clrGreen;  // Prev Daily Low Color
+input int         ADR_ATRPeriod = 15;       // ATR Period for ADR
+input int         TimeZoneOfData = 0;       // Chart time zone (GMT)
+input int         TimeZoneOfSession = 0;    // Dest time zone (GMT)
 input color       ADR_Color1 = clrRed;      // Normal ADR Color
 input color       ADR_Color2 = clrBlue;     // Reached ADR Color
 input color       ADR_ColorOpen = clrGray;  // Daily Open Color
 input color       ADR_ColorMid = clrSilver; // ADR Mid Color
+input bool        PlotPrevDayHL = true;     // Plot Prev Day High/Low
+input color       PDH_Color = clrOrange;    // Prev Day High Color
+input color       PDL_Color = clrOrange;    // Prev Day Low Color
 
 input string      __money__ = "--- Risk Analyzer ---"; // [ Money ]
 input double      VirtualBalance = 1000;    // Virtual Balance ($)
@@ -430,43 +427,61 @@ int OnCalculate(const int rates_total,
         ComputeDayIndices(TimeZoneOfData, TimeZoneOfSession, idxToday, idxYestStart, idxYestEnd);
         
         datetime startofday = time[idxToday];
+        double adr = iATR(NULL, PERIOD_D1, ADR_ATRPeriod, 1);
         
-        // The original ADR calculation loop is removed as it's replaced by the new logic below.
-        // The new ADR calculation is based on iATR and then plotted.
-        // The previous logic for t_high, t_low, a_high, a_low, a_reached is no longer needed.
+        double t_high = 0, t_low = 0, t_open = 0;
+        double a_high = 0, a_low = 0;
+        double pdh = 0, pdl = 0;
+        bool a_reached = false;
         
-        if(idxYestStart < rates_total && idxYestEnd >= idxYestStart)
+        int tzsec = (TimeZoneOfData + TimeZoneOfSession) * 3600;
+
+        for(int j = idxToday; j >= 0; j--)
         {
-             // ADR Calculation (Existing)
-             double sumHighLow = 0;
-             for(int k=1; k<=ADR_ATRPeriod; k++) sumHighLow += (iHigh(NULL, PERIOD_D1, k) - iLow(NULL, PERIOD_D1, k));
-             double adr = sumHighLow / ADR_ATRPeriod;
-             
-             double open_today = open[idxToday];
-             
-             SetADRLevel("Open", open_today, ADR_OpenColor, STYLE_SOLID, 1, time[idxToday]);
-             SetADRLevel("High", open_today + adr, ADR_HighLowColor, STYLE_DASH, 1, time[idxToday]);
-             SetADRLevel("Low", open_today - adr, ADR_HighLowColor, STYLE_DASH, 1, time[idxToday]);
-             SetADRLevel("Mid", open_today + (adr/2), ADR_MidColor, STYLE_DOT, 1, time[idxToday]);
-             
-             // Prev Daily High/Low Calculation
-             if(PlotPrevDailyHL)
-             {
-                 double pd_high = -1.0;
-                 double pd_low = 999999.0;
-                 for(int k = idxYestStart; k <= idxYestEnd; k++)
-                 {
-                     if(high[k] > pd_high) pd_high = high[k];
-                     if(low[k] < pd_low) pd_low = low[k];
-                 }
-                 
-                 if(pd_high > 0 && pd_low < 999999.0)
-                 {
-                     SetADRLevel("Prev High", pd_high, PrevDailyHighColor, STYLE_SOLID, 1, time[idxToday]);
-                     SetADRLevel("Prev Low", pd_low, PrevDailyLowColor, STYLE_SOLID, 1, time[idxToday]);
-                 }
-             }
+            if(t_open == 0)
+            {
+                t_open = open[idxToday];
+                a_high = t_open + adr;
+                a_low = t_open - adr;
+                t_high = t_open; t_low = t_open;
+            }
+            t_high = MathMax(t_high, high[j]);
+            t_low = MathMin(t_low, low[j]);
+            if(t_high - t_low >= adr - Point/2.0) a_reached = true;
+            
+            if(!a_reached)
+            {
+                a_high = t_low + adr;
+                a_low = t_high - adr;
+            }
         }
+        
+        color adr_col = a_reached ? ADR_Color2 : ADR_Color1;
+        int adr_thick = a_reached ? 2 : 1;
+        
+        SetADRLevel("ADR High", a_high, adr_col, STYLE_DOT, adr_thick, startofday);
+        SetADRLevel("ADR Low", a_low, adr_col, STYLE_DOT, adr_thick, startofday);
+        SetADRLevel("ADR Mid", (a_high + a_low)/2.0, ADR_ColorMid, STYLE_DOT, 1, startofday);
+        // Calculate PDH/PDL
+        if(PlotPrevDayHL && idxYestStart > 0 && idxYestEnd >= idxYestStart)
+        {
+            pdh = high[idxYestStart];
+            pdl = low[idxYestStart];
+            for(int k = idxYestStart-1; k >= idxYestEnd; k--)
+            {
+                pdh = MathMax(pdh, high[k]);
+                pdl = MathMin(pdl, low[k]);
+            }
+            SetADRLevel("PDH", pdh, PDH_Color, STYLE_DASH, 1, startofday);
+            SetADRLevel("PDL", pdl, PDL_Color, STYLE_DASH, 1, startofday);
+        }
+        else
+        {
+            ObjectDelete("[MR_ADR] PDH Line");
+            ObjectDelete("[MR_ADR] PDL Line");
+        }
+
+        SetADRLevel("Open", t_open, ADR_ColorOpen, STYLE_SOLID, 1, startofday);
     }
     else DeleteADRVisuals();
 

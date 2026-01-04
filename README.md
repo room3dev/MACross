@@ -17,7 +17,6 @@ Advanced Moving Average Crossover indicator for MetaTrader 4, providing real-tim
 - **Average Holding Time**: Displays precisely how many bars on average winning and losing trades are held.
 - **Market Bias Filter**: Restrict the indicator to showing only Buy signals, only Sell signals, or both.
 - **ADR Filter & Visuals**: Validates signals based on the daily range and plots **Daily Open**, **ADR High/Low**, and **ADR Mid** lines directly on your chart.
-- **Previous Daily High/Low**: Optionally plots the High and Low of the previous trading day (Simulated Session) for key support/resistance levels.
 - **MTF Ichimoku Cloud**: Renders the Ichimoku cloud from your **Filter Timeframe** (e.g., H4) onto your current trading chart.
 - **Active Trade Visuals**: When a trade is open, displays dashed horizontal lines for **Entry Price** and **Stop Loss**, plus a distinct circle marker at the signal point.
 - **Adjustable Pip Definition**: Custom multiplier to standardize pips (Defaults to **10.0** for Gold/XAUUSD so 1 pip = 0.1 USD).

@@ -463,11 +463,11 @@ int OnCalculate(const int rates_total,
         SetADRLevel("ADR Low", a_low, adr_col, STYLE_DOT, adr_thick, startofday);
         SetADRLevel("ADR Mid", (a_high + a_low)/2.0, ADR_ColorMid, STYLE_DOT, 1, startofday);
         // Calculate PDH/PDL
-        if(PlotPrevDayHL && idxYestStart > 0 && idxYestEnd >= idxYestStart)
+        if(PlotPrevDayHL && idxYestEnd != -1 && idxYestStart > idxYestEnd)
         {
             pdh = high[idxYestStart];
             pdl = low[idxYestStart];
-            for(int k = idxYestStart-1; k >= idxYestEnd; k--)
+            for(int k = idxYestStart; k >= idxYestEnd; k--)
             {
                 pdh = MathMax(pdh, high[k]);
                 pdl = MathMin(pdl, low[k]);
@@ -747,7 +747,7 @@ void SetTradeLine(string text, double level, color col, int linestyle, int thick
 
 void ComputeDayIndices(int tzlocal, int tzdest, int &idxToday, int &idxYesterdayStart, int &idxYesterdayEnd)
 {
-    int tzdiffsec = (tzlocal + tzdest) * 3600;
+    int tzdiffsec = (tzlocal - tzdest) * 3600;
     int dayToday = TimeDayOfWeek(Time[0] - tzdiffsec);
     int dayYesterday = (dayToday == 0) ? 5 : (dayToday == 1 ? 5 : dayToday - 1);
 
@@ -757,16 +757,21 @@ void ComputeDayIndices(int tzlocal, int tzdest, int &idxToday, int &idxYesterday
         if(TimeDayOfWeek(Time[i] - tzdiffsec) != dayToday) { idxToday = i - 1; break; }
     }
 
-    idxYesterdayEnd = 0;
-    for(int j = idxToday + 1; j <= 2880 + 1; j++)
+    idxYesterdayEnd = -1;
+    for(int j = idxToday + 1; j <= 10000; j++) // Increased limit for M1 weekend gaps
     {
+        if(j >= Bars) break;
         if(TimeDayOfWeek(Time[j] - tzdiffsec) == dayYesterday) { idxYesterdayEnd = j; break; }
     }
 
     idxYesterdayStart = idxYesterdayEnd;
-    for(int k = 1; k <= 1440; k++)
+    if(idxYesterdayEnd != -1)
     {
-        if(TimeDayOfWeek(Time[idxYesterdayEnd + k] - tzdiffsec) != dayYesterday) { idxYesterdayStart = idxYesterdayEnd + k - 1; break; }
+        for(int k = 1; k <= 5000; k++)
+        {
+            if(idxYesterdayEnd + k >= Bars) break;
+            if(TimeDayOfWeek(Time[idxYesterdayEnd + k] - tzdiffsec) != dayYesterday) { idxYesterdayStart = idxYesterdayEnd + k - 1; break; }
+        }
     }
 }
 

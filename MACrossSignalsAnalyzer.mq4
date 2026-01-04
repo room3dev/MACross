@@ -472,8 +472,8 @@ int OnCalculate(const int rates_total,
                 pdh = MathMax(pdh, high[k]);
                 pdl = MathMin(pdl, low[k]);
             }
-            SetADRLevel("PDH", pdh, PDH_Color, STYLE_DASH, 1, startofday);
-            SetADRLevel("PDL", pdl, PDL_Color, STYLE_DASH, 1, startofday);
+            SetADRLevel("PDH", pdh, PDH_Color, STYLE_DOT, 1, startofday);
+            SetADRLevel("PDL", pdl, PDL_Color, STYLE_DOT, 1, startofday);
         }
         else
         {
